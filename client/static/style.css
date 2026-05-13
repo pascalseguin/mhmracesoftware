@@ -312,9 +312,6 @@ th {
   font-weight: 700;
   letter-spacing: 0.07em;
   text-transform: uppercase;
-  position: sticky;
-  top: 50px; /* below the fixed nav */
-  z-index: 10;
 }
 td { padding: 0.52rem 0.75rem; border-bottom: 1px solid var(--border); vertical-align: middle; }
 tr:last-child td { border-bottom: none; }
