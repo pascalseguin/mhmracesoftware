@@ -8,15 +8,21 @@
 </head>
 <body>
 
+<div id="page-loader"></div>
+
 <nav>
   <span class="brand">{{ cfg.race_name }} {{ cfg.race_year }}</span>
-  <ul>
+
+  <button class="nav-hamburger" id="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
+    <span></span><span></span><span></span>
+  </button>
+
+  <ul id="nav-menu">
     <li><a href="/" {% if request.url.path == "/" %}class="active"{% endif %}>Dashboard</a></li>
 
-    {# Setup — Racers, Classes, Courses, Import #}
     {% set setup_active = request.url.path.startswith("/racers") or request.url.path.startswith("/classes") or request.url.path.startswith("/courses") or request.url.path.startswith("/chips") or request.url.path.startswith("/import") %}
-    <li class="dropdown {% if setup_active %}active{% endif %}">
-      <span class="nav-label">Setup ▾</span>
+    <li class="dropdown {% if setup_active %}active{% endif %}" id="dd-setup">
+      <span class="nav-label" onclick="toggleMobileDropdown('dd-setup')">Setup ▾</span>
       <div class="dropdown-menu">
         <a href="/racers"  {% if request.url.path.startswith("/racers")  %}class="active"{% endif %}>Racers</a>
         <a href="/classes" {% if request.url.path.startswith("/classes") %}class="active"{% endif %}>Classes</a>
@@ -27,10 +33,9 @@
       </div>
     </li>
 
-    {# Points — Results, Adjustments, Bonus/Penalty Types #}
     {% set points_active = request.url.path == "/results" or request.url.path.startswith("/results/") or request.url.path.startswith("/adjustments") or request.url.path.startswith("/adjustment-types") %}
-    <li class="dropdown {% if points_active %}active{% endif %}">
-      <span class="nav-label">Points ▾</span>
+    <li class="dropdown {% if points_active %}active{% endif %}" id="dd-points">
+      <span class="nav-label" onclick="toggleMobileDropdown('dd-points')">Points ▾</span>
       <div class="dropdown-menu">
         <a href="/results" {% if request.url.path == "/results" %}class="active"{% endif %}>Leaderboard</a>
         {% if request.session.get("user") %}
@@ -43,10 +48,9 @@
 
     <li><a href="/export" {% if request.url.path.startswith("/export") %}class="active"{% endif %}>Export</a></li>
 
-    {# System — Settings, Server #}
     {% set system_active = request.url.path.startswith("/settings") or request.url.path.startswith("/server-setup") %}
-    <li class="dropdown {% if system_active %}active{% endif %}">
-      <span class="nav-label">System ▾</span>
+    <li class="dropdown {% if system_active %}active{% endif %}" id="dd-system">
+      <span class="nav-label" onclick="toggleMobileDropdown('dd-system')">System ▾</span>
       <div class="dropdown-menu">
         <a href="/settings"     {% if request.url.path.startswith("/settings")     %}class="active"{% endif %}>Settings</a>
         <a href="/server-setup" {% if request.url.path.startswith("/server-setup") %}class="active"{% endif %}>Server Sync</a>
@@ -54,7 +58,7 @@
     </li>
 
     {% if request.session.get("user") %}
-    <li><a href="/logout" style="color:rgba(255,255,255,0.55);">Logout</a></li>
+    <li><a href="/logout" style="color:rgba(255,255,255,0.5);">Logout</a></li>
     {% endif %}
   </ul>
 </nav>
@@ -63,11 +67,78 @@
 
 <div class="container">
   {% if msg %}
-  <div class="flash">{{ msg }}</div>
+  {%- set msg_lower = msg | lower -%}
+  {%- if "error" in msg_lower or "fail" in msg_lower or "not found" in msg_lower
+       or "expired" in msg_lower or "already exists" in msg_lower
+       or "required" in msg_lower or "invalid" in msg_lower or "wrong" in msg_lower -%}
+    {%- set flash_class = "flash flash-error" -%}
+  {%- elif "warning" in msg_lower or "unmatched" in msg_lower or "no " in msg_lower -%}
+    {%- set flash_class = "flash flash-warning" -%}
+  {%- else -%}
+    {%- set flash_class = "flash flash-success" -%}
+  {%- endif -%}
+  <div class="{{ flash_class }}" id="flash-msg" role="alert">{{ msg }}</div>
   {% endif %}
 
   {% block content %}{% endblock %}
 </div>
+
+<script>
+// ── Page loader ───────────────────────────────────────────────────────────
+(function () {
+  var loader = document.getElementById('page-loader');
+  document.addEventListener('submit', function () {
+    loader.className = 'loading';
+  });
+  window.addEventListener('pageshow', function () {
+    loader.className = 'done';
+  });
+})();
+
+// ── Flash auto-dismiss ────────────────────────────────────────────────────
+(function () {
+  var flash = document.getElementById('flash-msg');
+  if (!flash) return;
+  setTimeout(function () {
+    flash.style.transition = 'opacity 0.5s ease, max-height 0.4s ease 0.5s, margin 0.4s ease 0.5s, padding 0.4s ease 0.5s';
+    flash.style.overflow = 'hidden';
+    flash.style.maxHeight = flash.offsetHeight + 'px';
+    requestAnimationFrame(function () {
+      flash.style.opacity = '0';
+      flash.style.maxHeight = '0';
+      flash.style.marginBottom = '0';
+      flash.style.paddingTop = '0';
+      flash.style.paddingBottom = '0';
+    });
+  }, 4000);
+})();
+
+// ── Mobile nav hamburger ──────────────────────────────────────────────────
+(function () {
+  var btn  = document.getElementById('nav-toggle');
+  var menu = document.getElementById('nav-menu');
+  if (!btn || !menu) return;
+  btn.addEventListener('click', function () {
+    var open = menu.classList.toggle('open');
+    btn.classList.toggle('open', open);
+    btn.setAttribute('aria-expanded', open);
+  });
+  // Close nav when a link is clicked
+  menu.querySelectorAll('a').forEach(function (a) {
+    a.addEventListener('click', function () {
+      menu.classList.remove('open');
+      btn.classList.remove('open');
+      btn.setAttribute('aria-expanded', 'false');
+    });
+  });
+})();
+
+function toggleMobileDropdown(id) {
+  if (window.innerWidth > 720) return;
+  var li = document.getElementById(id);
+  if (li) li.classList.toggle('mobile-open');
+}
+</script>
 
 </body>
 </html>
