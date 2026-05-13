@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="refresh" content="60">
+  <title>Results — Medicine Hat Massacre Race</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --nav-bg: #1a1a1a;
+      --accent: #c0392b;
+      --body-bg: #f4f4f4;
+      --card-bg: #fff;
+      --text: #222;
+      --text-muted: #666;
+      --border: #ddd;
+      --font: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --font-heading: "Oswald", "Impact", "Arial Narrow", sans-serif;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: var(--font); background: var(--body-bg); color: var(--text); }
+    a { color: var(--accent); text-decoration: none; }
+
+    nav {
+      background: var(--nav-bg);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 1.5rem;
+      height: 50px;
+    }
+    nav .brand { color: #fff; font-family: var(--font-heading); font-size: 1rem; letter-spacing: .08em; text-transform: uppercase; }
+    nav .live { color: rgba(255,255,255,.6); font-size: .75rem; }
+
+    .hero {
+      background: var(--nav-bg);
+      border-bottom: 3px solid var(--accent);
+      padding: 2rem;
+      color: white;
+    }
+    .hero h1 { font-family: var(--font-heading); font-size: 2rem; letter-spacing: .06em; text-transform: uppercase; }
+    .hero p { color: rgba(255,255,255,.65); margin-top: .3rem; font-size: .9rem; }
+
+    .container { max-width: 1000px; margin: 0 auto; padding: 1.5rem; }
+
+    .filter-bar { display: flex; gap: .5rem; flex-wrap: wrap; margin-bottom: 1.25rem; align-items: center; }
+    .filter-bar span { font-size: .78rem; text-transform: uppercase; color: var(--text-muted); font-weight: 600; }
+    .btn { display: inline-block; padding: .35rem .85rem; border-radius: 4px; font-size: .78rem;
+           font-weight: 600; letter-spacing: .03em; text-transform: uppercase; transition: background .15s; }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-secondary { background: #555; color: #fff; }
+    .btn:hover { opacity: .88; }
+
+    .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 6px;
+            box-shadow: 0 1px 3px rgba(0,0,0,.06); overflow: hidden; }
+    .card-header { background: var(--nav-bg); color: #fff; padding: .6rem 1rem;
+                   font-family: var(--font-heading); font-size: .9rem; letter-spacing: .06em; text-transform: uppercase; }
+
+    table { width: 100%; border-collapse: collapse; font-size: .88rem; }
+    th { background: #2c2c2c; color: #fff; text-align: left; padding: .55rem .75rem;
+         font-family: var(--font-heading); font-size: .78rem; letter-spacing: .06em; text-transform: uppercase; }
+    td { padding: .5rem .75rem; border-bottom: 1px solid var(--border); vertical-align: middle; }
+    tr:last-child td { border-bottom: none; }
+    .rank-1 td { background: #fef9e7; font-weight: 700; }
+    .rank-2 td { background: #f9f9f9; }
+    .rank-3 td { background: #fdfefe; }
+
+    .badge { display: inline-block; padding: .18rem .45rem; border-radius: 3px;
+             font-size: .7rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+    .badge-ok { background: #d5f5e3; color: #1e8449; }
+    .badge-dns { background: #eaecee; color: #555; }
+    .badge-dnf { background: #fde8e8; color: #922b21; }
+    .badge-active { background: #d6eaf8; color: #1a5276; }
+
+    footer { text-align: center; padding: 2rem; color: var(--text-muted); font-size: .8rem; }
+    .refresh-note { text-align: right; color: var(--text-muted); font-size: .75rem; margin-bottom: .5rem; }
+  </style>
+</head>
+<body>
+
+<nav>
+  <span class="brand">MHM Race 2026</span>
+  <span class="live">Live Results — auto-refresh every 60s</span>
+</nav>
+
+<div class="hero">
+  <h1>Medicine Hat Massacre</h1>
+  <p>{{ total }} scored entries</p>
+</div>
+
+<div class="container">
+
+  <div class="filter-bar">
+    <span>Course:</span>
+    <a href="/" class="btn {% if not selected_course_id %}btn-primary{% else %}btn-secondary{% endif %}">All</a>
+    {% for cid, cname in courses.items() %}
+    <a href="/?course_id={{ cid }}"
+       class="btn {% if selected_course_id == cid %}btn-primary{% else %}btn-secondary{% endif %}">
+      {{ cname }}
+    </a>
+    {% endfor %}
+  </div>
+
+  <p class="refresh-note">Last updated: auto-refresh in 60s</p>
+
+  <div class="card">
+    <div class="card-header">Leaderboard</div>
+    {% if ranked %}
+    <table>
+      <thead>
+        <tr>
+          <th>#</th><th>Racer</th><th>Team</th><th>Course</th>
+          <th>Status</th><th>Points</th><th>Time</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for rank, r in ranked %}
+        <tr class="{% if rank == 1 %}rank-1{% elif rank == 2 %}rank-2{% elif rank == 3 %}rank-3{% endif %}">
+          <td><strong>{{ rank }}</strong></td>
+          <td>{{ r.racer.name }}</td>
+          <td>{{ r.racer.team or "—" }}</td>
+          <td>{{ r.course.name }}</td>
+          <td><span class="badge badge-{{ r.entry.status.value | lower }}">{{ r.entry.status.value }}</span></td>
+          <td><strong>{{ r.total_points }}</strong></td>
+          <td>
+            {% if r.elapsed_seconds %}
+            {{ "%d:%02d:%02d" | format(r.elapsed_seconds // 3600, (r.elapsed_seconds % 3600) // 60, r.elapsed_seconds % 60) }}
+            {% else %}—{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p style="padding:1.5rem;color:var(--text-muted);">No results yet.</p>
+    {% endif %}
+  </div>
+
+</div>
+
+<footer>Medicine Hat Massacre Adventure Race &nbsp;·&nbsp; mhmassacre.ca</footer>
+
+</body>
+</html>

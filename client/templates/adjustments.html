@@ -1,0 +1,355 @@
+{% extends "base.html" %}
+{% block title %}Adjustments{% endblock %}
+
+{% block page_header %}
+<div class="page-header">
+  <h1>Manual Adjustments</h1>
+  <p>Select a team on the left to view and edit their entry</p>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{% if msg %}
+<div class="alert alert-success" style="margin-bottom:1rem;padding:.6rem 1rem;background:#d4edda;border:1px solid #c3e6cb;border-radius:4px;color:#155724;font-size:.88rem;">
+  {{ msg }}
+</div>
+{% endif %}
+
+<div style="display:grid;grid-template-columns:260px 1fr;gap:1rem;align-items:start;">
+
+  <!-- ── Left panel: racer list ─────────────────────────────────────────────── -->
+  <div class="card" style="padding:.75rem;position:sticky;top:1rem;max-height:calc(100vh - 140px);display:flex;flex-direction:column;">
+    <p style="font-size:.78rem;font-weight:600;text-transform:uppercase;color:var(--text-muted);margin:0 0 .5rem;">
+      Teams ({{ results | length }})
+    </p>
+    <input id="racer-search" type="text" placeholder="Search name or bib…"
+           oninput="filterRacers(this.value)"
+           style="width:100%;margin-bottom:.5rem;font-size:.85rem;">
+    <div id="racer-list" style="overflow-y:auto;flex:1;">
+      {% for r in results | sort(attribute='racer.bib_number') %}
+      <a href="/adjustments?entry_id={{ r.entry.id }}"
+         class="racer-item {% if selected_entry_id == r.entry.id %}selected{% endif %}"
+         data-search="{{ (r.racer.bib_number | string) }} {{ r.racer.name | lower }} {{ r.course.name | lower }}"
+         style="display:flex;justify-content:space-between;align-items:center;
+                padding:.35rem .5rem;border-radius:4px;text-decoration:none;
+                margin-bottom:2px;color:var(--text);
+                {% if selected_entry_id == r.entry.id %}background:var(--accent);color:#fff;{% endif %}">
+        <span>
+          <span style="font-size:.75rem;opacity:.7;margin-right:.3rem;">
+            #{{ r.racer.bib_number or "—" }}
+          </span>
+          <strong style="font-size:.88rem;">{{ r.racer.name }}</strong>
+          <br>
+          <span style="font-size:.75rem;opacity:.7;">{{ r.course.name }}</span>
+        </span>
+        <span style="font-size:.82rem;font-weight:600;white-space:nowrap;margin-left:.5rem;">
+          {{ r.total_points }} pts
+          {% if r.unmatched_punch_codes %}
+          <span style="color:{% if selected_entry_id == r.entry.id %}#fff{% else %}var(--warning){% endif %};font-size:.7rem;" title="{{ r.unmatched_punch_codes|length }} unmatched punch(es)">⚠</span>
+          {% endif %}
+        </span>
+      </a>
+      {% else %}
+      <p style="color:var(--text-muted);font-size:.85rem;">No entries yet.</p>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- ── Right panel: entry detail ─────────────────────────────────────────── -->
+  <div>
+  {% if selected_result %}
+  {% set r    = selected_result %}
+  {% set data = selected_data %}
+
+  <div class="card">
+
+    <!-- Header -->
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.5rem;margin-bottom:1rem;">
+      <div>
+        <span style="font-family:var(--font-heading);font-size:1.4rem;color:var(--accent);">
+          #{{ r.racer.bib_number or "—" }}
+        </span>
+        <span style="font-family:var(--font-heading);font-size:1.1rem;margin-left:.4rem;text-transform:uppercase;">
+          {{ r.racer.name }}
+        </span>
+        <span style="color:var(--text-muted);margin-left:.5rem;font-size:.9rem;">— {{ r.course.name }}</span>
+        {% if r.entry.si_chip %}
+        <span style="color:var(--text-muted);font-size:.8rem;margin-left:.4rem;">(chip {{ r.entry.si_chip }})</span>
+        {% endif %}
+      </div>
+      <div style="display:flex;gap:.5rem;align-items:center;">
+        <span class="badge badge-{{ r.entry.status.value | lower }}">{{ r.entry.status.value }}</span>
+        <strong style="font-size:1.1rem;">{{ r.total_points }} pts</strong>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin-bottom:1rem;">
+
+      <!-- Score breakdown -->
+      <div>
+        <p style="font-size:.78rem;text-transform:uppercase;font-weight:600;color:var(--text-muted);margin-bottom:.5rem;">Score Breakdown</p>
+        <table style="width:auto;font-size:.88rem;">
+          <tr><td style="padding:.15rem .75rem .15rem 0;color:var(--text-muted);">Raw points</td><td><strong>{{ r.raw_points }}</strong></td></tr>
+          {% if r.overtime_penalty %}
+          <tr><td style="color:var(--text-muted);">Overtime ({{ r.overtime_minutes }} min)</td><td style="color:var(--danger);">-{{ r.overtime_penalty }}</td></tr>
+          {% endif %}
+          {% if r.total_adjustments != 0 %}
+          <tr><td style="color:var(--text-muted);">Adjustments</td>
+              <td style="color:{% if r.total_adjustments > 0 %}var(--success){% else %}var(--danger){% endif %};">{{ "%+d" | format(r.total_adjustments) }}</td></tr>
+          {% endif %}
+          <tr style="border-top:1px solid var(--border);"><td><strong>Total</strong></td><td><strong>{{ r.total_points }}</strong></td></tr>
+        </table>
+        {% if r.controls_missed_mandatory %}
+        <p style="color:var(--danger);margin-top:.5rem;font-size:.82rem;">
+          Missed mandatory: {% for cp in r.controls_missed_mandatory %}{{ cp.name or cp.si_code }}{% if not loop.last %}, {% endif %}{% endfor %}
+        </p>
+        {% endif %}
+        {% if r.order_violation %}
+        <p style="color:var(--warning);font-size:.82rem;">Order violation recorded</p>
+        {% endif %}
+      </div>
+
+      <!-- Status + times -->
+      <div>
+        <p style="font-size:.78rem;text-transform:uppercase;font-weight:600;color:var(--text-muted);margin-bottom:.5rem;">Status &amp; Times</p>
+        <form method="post" action="/adjustments/{{ r.entry.id }}/status" style="margin-bottom:.5rem;display:flex;gap:.5rem;align-items:center;">
+          <select name="status">
+            {% for s in ["ACTIVE","OK","DNF","DNS","DSQ"] %}
+            <option value="{{ s }}" {% if r.entry.status.value == s %}selected{% endif %}>{{ s }}</option>
+            {% endfor %}
+          </select>
+          <button type="submit" class="btn btn-secondary btn-sm">Set</button>
+        </form>
+        <form method="post" action="/adjustments/{{ r.entry.id }}/times">
+          <div class="form-row" style="gap:.5rem;">
+            <div class="form-group">
+              <label>Start</label>
+              <input type="datetime-local" name="start_time"
+                value="{{ r.entry.start_time.strftime('%Y-%m-%dT%H:%M') if r.entry.start_time else '' }}"
+                style="font-size:.82rem;">
+            </div>
+            <div class="form-group">
+              <label>Finish</label>
+              <input type="datetime-local" name="finish_time"
+                value="{{ r.entry.finish_time.strftime('%Y-%m-%dT%H:%M') if r.entry.finish_time else '' }}"
+                style="font-size:.82rem;">
+            </div>
+          </div>
+          <button type="submit" class="btn btn-secondary btn-sm">Update Times</button>
+        </form>
+      </div>
+
+    </div>
+
+    <!-- Adjustments -->
+    <div style="border-top:1px solid var(--border);padding-top:1rem;margin-bottom:1rem;">
+      <p style="font-size:.78rem;text-transform:uppercase;font-weight:600;color:var(--text-muted);margin-bottom:.5rem;">
+        Bonuses &amp; Penalties
+      </p>
+
+      {% if data.adjustments %}
+      <div class="table-wrap" style="margin-bottom:.75rem;">
+        <table>
+          <thead><tr><th>Description</th><th>Category</th><th>Points</th><th></th></tr></thead>
+          <tbody>
+            {% for a in data.adjustments %}
+            <tr>
+              <td>{{ a.description }}</td>
+              <td>
+                {% if a.category == 'bonus' %}
+                <span class="badge" style="background:var(--success);color:#fff;font-size:.65rem;">Bonus</span>
+                {% elif a.category == 'penalty' %}
+                <span class="badge" style="background:var(--danger);color:#fff;font-size:.65rem;">Penalty</span>
+                {% else %}
+                <span class="badge badge-active" style="font-size:.65rem;">Manual</span>
+                {% endif %}
+              </td>
+              <td style="color:{% if a.points >= 0 %}var(--success){% else %}var(--danger){% endif %};">
+                {{ "%+d" | format(a.points) }}
+              </td>
+              <td>
+                <form method="post" action="/adjustments/{{ r.entry.id }}/adjustment/{{ a.id }}/delete">
+                  <button type="submit" class="btn btn-danger btn-sm">Remove</button>
+                </form>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% endif %}
+
+      {% if adj_types %}
+      <div style="background:var(--bg-alt,#f8f9fa);border:1px solid var(--border);border-radius:4px;padding:.75rem .9rem;margin-bottom:.75rem;">
+        <p style="font-size:.78rem;font-weight:600;text-transform:uppercase;color:var(--text-muted);margin:0 0 .5rem;">Apply Predefined Type</p>
+        <form method="post" action="/adjustments/{{ r.entry.id }}/adjustment/add"
+              style="display:flex;gap:.5rem;align-items:flex-end;flex-wrap:wrap;">
+          <div class="form-group" style="margin:0;">
+            <label style="font-size:.8rem;">Type</label>
+            <select name="type_id" onchange="prefillPoints(this)" style="min-width:180px;">
+              {% for t in adj_types %}
+              <option value="{{ t.id }}" data-default="{{ t.default_points }}" data-category="{{ t.category }}">
+                {{ t.name }} ({% if t.category == 'bonus' %}+{% else %}-{% endif %}{{ t.default_points }} default)
+              </option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="form-group" style="margin:0;">
+            <label style="font-size:.8rem;">Points (override)</label>
+            <input type="number" name="points" id="adj-pts" value="{{ adj_types[0].default_points }}" min="0" style="width:80px;">
+          </div>
+          <div class="form-group" style="margin:0;">
+            <label style="font-size:.8rem;">Note <span style="font-weight:400;color:var(--text-muted);">(optional)</span></label>
+            <input type="text" name="description" placeholder="Leave blank to use type name" style="width:180px;">
+          </div>
+          <button type="submit" class="btn btn-primary btn-sm">Apply</button>
+        </form>
+      </div>
+      {% else %}
+      <p style="font-size:.82rem;color:var(--text-muted);margin-bottom:.5rem;">
+        No types defined — <a href="/adjustment-types">create bonus/penalty types</a> first.
+      </p>
+      {% endif %}
+
+      <details>
+        <summary style="cursor:pointer;font-size:.82rem;color:var(--text-muted);margin-bottom:.4rem;">+ Add manual free-form adjustment</summary>
+        <form method="post" action="/adjustments/{{ r.entry.id }}/adjustment/add" style="margin-top:.5rem;">
+          <input type="hidden" name="type_id" value="">
+          <div class="form-row" style="align-items:flex-end;">
+            <div class="form-group">
+              <label>Description</label>
+              <input type="text" name="description" placeholder="e.g. Courtesy point" style="width:200px;">
+            </div>
+            <div class="form-group">
+              <label>Points <span style="color:var(--text-muted);font-weight:400;">(negative = deduction)</span></label>
+              <input type="number" name="points" value="0" style="width:100px;">
+            </div>
+            <button type="submit" class="btn btn-secondary btn-sm">Add</button>
+          </div>
+        </form>
+      </details>
+    </div>
+
+    <!-- Punches -->
+    <div style="border-top:1px solid var(--border);padding-top:1rem;">
+      <p style="font-size:.78rem;text-transform:uppercase;font-weight:600;color:var(--text-muted);margin-bottom:.5rem;">Punches</p>
+
+      {% if r.unmatched_punch_codes %}
+      <div style="background:#fff3cd;border:1px solid #e6a817;border-radius:4px;padding:.75rem .9rem;margin-bottom:.75rem;font-size:.85rem;">
+        <strong>{{ r.unmatched_punch_codes|length }} punch(es) didn't match any control in {{ r.course.name }}.</strong>
+        <p style="margin:.35rem 0 .6rem;color:#6b5b00;">
+          The SI code is what the chip physically recorded. Rows highlighted below are unmatched.
+        </p>
+        <form method="post" action="/courses/{{ r.course.id }}/controls/add-bulk" style="margin:0;">
+          <table style="font-size:.83rem;margin-bottom:.6rem;width:auto;">
+            <thead>
+              <tr>
+                <th style="text-align:left;padding:.2rem .6rem .2rem 0;">SI Code</th>
+                <th style="text-align:left;padding:.2rem .6rem .2rem 0;">Name / Label</th>
+                <th style="text-align:left;padding:.2rem .6rem .2rem 0;">Points</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for code in r.unmatched_punch_codes %}
+              <tr>
+                <td style="padding:.2rem .6rem .2rem 0;">
+                  <input type="hidden" name="si_code" value="{{ code }}">
+                  <code>{{ code }}</code>
+                </td>
+                <td style="padding:.2rem .6rem .2rem 0;">
+                  <input type="text" name="ctrl_name" placeholder="e.g. CP{{ loop.index }}" style="width:120px;font-size:.83rem;padding:.2rem .4rem;">
+                </td>
+                <td style="padding:.2rem 0 .2rem 0;">
+                  <input type="number" name="points" value="0" style="width:65px;font-size:.83rem;padding:.2rem .4rem;">
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          <button type="submit" class="btn btn-primary btn-sm">Add as Controls to {{ r.course.name }}</button>
+        </form>
+      </div>
+      {% endif %}
+
+      {% if data.punches %}
+      {% set matched_codes = r.controls_visited | map(attribute='si_code') | list %}
+      <div class="table-wrap" style="margin-bottom:.75rem;">
+        <table>
+          <thead><tr><th>SI Code</th><th>Time</th><th>Matched Control</th><th>Manual</th><th></th></tr></thead>
+          <tbody>
+            {% for p in data.punches %}
+            {% set is_matched = p.si_code in matched_codes %}
+            <tr style="{% if not is_matched %}background:#fff8e1;{% endif %}">
+              <td><code>{{ p.si_code }}</code></td>
+              <td>{{ p.punch_time[11:19] }}</td>
+              <td>
+                {% if is_matched %}
+                  {% for cp in r.controls_visited if cp.si_code == p.si_code %}
+                  <span style="color:var(--success);">{{ cp.name or cp.si_code }} ({{ cp.points }} pts)</span>
+                  {% endfor %}
+                {% else %}
+                  <span style="color:#b07b00;">No match</span>
+                {% endif %}
+              </td>
+              <td>{% if p.is_manual %}<span class="badge badge-active">Yes</span>{% else %}—{% endif %}</td>
+              <td>
+                <form method="post" action="/adjustments/{{ r.entry.id }}/punch/{{ p.id }}/delete">
+                  <button type="submit" class="btn btn-danger btn-sm">Remove</button>
+                </form>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% endif %}
+
+      <form method="post" action="/adjustments/{{ r.entry.id }}/punch/add">
+        <div class="form-row" style="align-items:flex-end;">
+          <div class="form-group">
+            <label>SI Code</label>
+            <input type="number" name="si_code" style="width:90px;">
+          </div>
+          <div class="form-group">
+            <label>Time</label>
+            <input type="datetime-local" name="punch_time">
+          </div>
+          <button type="submit" class="btn btn-secondary btn-sm">Add Punch</button>
+        </div>
+      </form>
+    </div>
+
+  </div><!-- /card -->
+
+  {% else %}
+  <div class="card" style="display:flex;align-items:center;justify-content:center;min-height:200px;">
+    <p style="color:var(--text-muted);">
+      {% if results %}
+        ← Select a team from the list to view their entry.
+      {% else %}
+        No entries yet — enroll teams in courses first.
+      {% endif %}
+    </p>
+  </div>
+  {% endif %}
+  </div><!-- /right panel -->
+
+</div><!-- /grid -->
+
+<script>
+function filterRacers(q) {
+  q = q.toLowerCase();
+  document.querySelectorAll('#racer-list .racer-item').forEach(function(el) {
+    el.style.display = el.dataset.search.includes(q) ? '' : 'none';
+  });
+}
+
+function prefillPoints(select) {
+  var opt   = select.options[select.selectedIndex];
+  var input = document.getElementById('adj-pts');
+  if (input) input.value = opt.getAttribute('data-default') || '0';
+}
+</script>
+
+{% endblock %}

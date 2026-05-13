@@ -1,0 +1,376 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+
+{% block page_header %}
+<div class="page-header">
+  <h1>Medicine Hat Massacre Race</h1>
+  <p>Event Management Dashboard</p>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="stats-grid">
+  <div class="stat-card">
+    <div class="stat-value">{{ racers | length }}</div>
+    <div class="stat-label">Registered Racers</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value">{{ courses | length }}</div>
+    <div class="stat-label">Courses</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value">{{ total_results }}</div>
+    <div class="stat-label">Scored Entries</div>
+  </div>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:1.25rem;">
+
+  <!-- SI Reader status -->
+  <div class="card">
+    <h2>SportIdent Reader</h2>
+
+    {% if si_port_active %}
+    <div class="si-status" style="margin-bottom:1rem;">
+      <div class="si-dot online"></div>
+      <span>Connected on <strong>{{ si_port_active }}</strong></span>
+    </div>
+    <form method="post" action="/si/disconnect">
+      <button type="submit" class="btn btn-danger btn-sm">Disconnect</button>
+    </form>
+
+    {% else %}
+    <div class="si-status" style="margin-bottom:1rem;">
+      <div class="si-dot offline"></div>
+      <span>Not connected</span>
+    </div>
+    <form method="post" action="/si/connect" style="display:flex;gap:.5rem;align-items:flex-end;">
+      <div class="form-group">
+        <label>COM Port</label>
+        <select name="port" style="min-width:120px;">
+          {% if si_ports %}
+            {% for p in si_ports %}
+            <option value="{{ p }}">{{ p }}</option>
+            {% endfor %}
+          {% else %}
+          <option value="" disabled selected>No devices found</option>
+          {% endif %}
+        </select>
+      </div>
+      <button type="submit" class="btn btn-success btn-sm" {% if not si_ports %}disabled{% endif %}>
+        Connect
+      </button>
+    </form>
+    {% if not si_ports %}
+    <p style="color:var(--text-muted);font-size:.8rem;margin-top:.5rem;">
+      Plug in the SI reader then <a href="/">refresh</a>.
+    </p>
+    {% endif %}
+    {% endif %}
+
+    <!-- Active course selector -->
+    <div style="border-top:1px solid var(--border);margin-top:1rem;padding-top:1rem;">
+      <form method="post" action="/si/course">
+        <div class="form-group" style="margin-bottom:.5rem;">
+          <label>Active Course (chip reads go to this course)</label>
+          <select name="course_id" onchange="this.form.submit()" style="min-width:180px;">
+            <option value="">— All Courses —</option>
+            {% for c in courses %}
+            <option value="{{ c.id }}" {% if cfg.selected_course_id == c.id %}selected{% endif %}>{{ c.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </form>
+    </div>
+
+    <div style="border-top:1px solid var(--border);margin-top:1rem;padding-top:1rem;">
+      <form method="post" action="/api/simulate-read" style="display:flex;gap:.5rem;align-items:flex-end;">
+        <div class="form-group">
+          <label>Simulate chip read</label>
+          <input type="number" name="si_chip" placeholder="SI Chip #" style="width:130px;">
+        </div>
+        <button type="submit" class="btn btn-secondary btn-sm">Read</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Sync status -->
+  <div class="card">
+    <h2>Server Sync</h2>
+    {% if cfg.server_url %}
+    <div class="si-status">
+      <div class="si-dot online"></div>
+      <span>Syncing to <strong>{{ cfg.server_url }}</strong> every {{ cfg.sync_interval_seconds }}s</span>
+    </div>
+    {% else %}
+    <div class="si-status">
+      <div class="si-dot offline"></div>
+      <span>Offline mode — <a href="/settings">add server URL to sync</a></span>
+    </div>
+    {% endif %}
+  </div>
+
+</div>
+
+<!-- Receipt Printer -->
+<div class="card">
+  <h2>Receipt Printer</h2>
+
+  <div style="display:flex;gap:2rem;align-items:flex-start;flex-wrap:wrap;">
+
+    <!-- Left: status + escpos warning -->
+    <div style="min-width:200px;">
+      <div class="si-status" style="margin-bottom:.6rem;">
+        {% if cfg.printer_name and escpos_available %}
+          <div class="si-dot online"></div>
+          <span>Ready — <strong>{{ cfg.printer_name }}</strong></span>
+        {% elif cfg.printer_name and not escpos_available %}
+          <div class="si-dot offline"></div>
+          <span>Configured but <strong>driver not installed</strong></span>
+        {% else %}
+          <div class="si-dot offline"></div>
+          <span>No printer selected</span>
+        {% endif %}
+      </div>
+
+      {% if cfg.get('print_on_read', true) and cfg.printer_name %}
+      <p style="font-size:.78rem;color:var(--success);">&#10003; Auto-prints on every chip read</p>
+      {% elif not cfg.get('print_on_read', true) %}
+      <p style="font-size:.78rem;color:var(--text-muted);">Auto-print is OFF</p>
+      {% else %}
+      <p style="font-size:.78rem;color:var(--text-muted);">Select a printer below to enable</p>
+      {% endif %}
+
+    </div>
+
+    <!-- Right: selector form + test print -->
+    <div style="flex:1;min-width:240px;">
+      <form method="post" action="/printer/set">
+        <div class="form-group" style="margin-bottom:.6rem;">
+          <label>Printer</label>
+          <select name="printer_name" style="width:100%;">
+            <option value="">— Disabled (saves to file) —</option>
+            {% for p in printers %}
+            <option value="{{ p }}" {% if cfg.printer_name == p %}selected{% endif %}>{{ p }}</option>
+            {% endfor %}
+            {# If the saved printer isn't in the detected list (e.g. printer offline),
+               keep it as an option so it isn't silently cleared on next save. #}
+            {% if cfg.printer_name and cfg.printer_name not in printers %}
+            <option value="{{ cfg.printer_name }}" selected>{{ cfg.printer_name }} ⚠ not detected</option>
+            {% endif %}
+          </select>
+          {% if not printers %}
+          <small style="color:var(--text-muted);">
+            No printers found — make sure a printer is installed in Windows, then
+            <a href="/">refresh the page</a>.
+          </small>
+          {% endif %}
+        </div>
+
+        <div class="form-group" style="margin-bottom:.75rem;">
+          <label style="display:flex;align-items:center;gap:.4rem;cursor:pointer;font-weight:400;">
+            <input type="checkbox" name="print_on_read" value="1"
+                   {% if cfg.get('print_on_read', true) %}checked{% endif %}
+                   style="width:15px;height:15px;">
+            Auto-print receipt on every chip read
+          </label>
+        </div>
+
+        <div style="display:flex;gap:.5rem;align-items:center;">
+          <button type="submit" class="btn btn-primary btn-sm">Save Printer Settings</button>
+        </div>
+      </form>
+
+      <div style="border-top:1px solid var(--border);margin-top:.9rem;padding-top:.75rem;
+                  display:flex;align-items:center;gap:.75rem;">
+        <button id="test-print-btn"
+                onclick="testPrint()"
+                class="btn btn-secondary btn-sm"
+                {% if not cfg.printer_name %}disabled title="Save a printer name first"{% endif %}>
+          Send Test Print
+        </button>
+        <span id="test-print-result" style="font-size:.82rem;"></span>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Quick links -->
+<div class="card">
+  <h2>Quick Actions</h2>
+  <div style="display:flex;gap:.75rem;flex-wrap:wrap;">
+    <a href="/racers" class="btn btn-primary">+ Add Racer</a>
+    <a href="/courses" class="btn btn-secondary">Manage Courses</a>
+    <a href="/results" class="btn btn-secondary">View Results</a>
+    <a href="/adjustments" class="btn btn-secondary">Manual Adjustments</a>
+  </div>
+</div>
+
+<!-- Unassigned chip reads -->
+{% if unknown_reads %}
+<div class="card" style="border-left:4px solid var(--warning, #f0a500);">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.6rem;">
+    <h2 style="margin:0;">⚠ Unassigned Chip Reads ({{ unknown_reads | length }})</h2>
+    <small style="color:var(--text-muted);">Assign each chip to a racer entry, then click Assign &amp; Score.</small>
+  </div>
+
+  {% for read in unknown_reads %}
+  <div style="background:var(--surface,#2a2a2a);border-radius:6px;padding:.75rem 1rem;
+              margin-bottom:.6rem;display:flex;gap:1rem;align-items:center;flex-wrap:wrap;">
+    <div>
+      <span style="font-family:monospace;font-size:1.05rem;font-weight:600;">Chip {{ read.si_chip }}</span>
+      <span style="font-size:.8rem;color:var(--text-muted);margin-left:.5rem;">
+        {{ read.punches | length }} punches · read {{ read.time }}
+      </span>
+    </div>
+    <form method="post" action="/api/assign-chip-read"
+          style="display:flex;gap:.5rem;align-items:center;flex:1;flex-wrap:wrap;">
+      <input type="hidden" name="si_chip" value="{{ read.si_chip }}">
+      <select name="entry_id" required style="flex:1;min-width:220px;max-width:400px;">
+        <option value="" disabled selected>— Select racer + course —</option>
+        {% for e in entries %}
+        <option value="{{ e.id }}">
+          {% if e.bib_number %}[{{ e.bib_number }}]{% endif %}
+          {{ e.racer_name }} — {{ e.course_name }}
+        </option>
+        {% endfor %}
+      </select>
+      <button type="submit" class="btn btn-success btn-sm">Assign &amp; Score</button>
+    </form>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<!-- Pending chip reads banner — shown when chips are awaiting review -->
+<div id="pending-reads-section" style="display:none;margin-bottom:1.25rem;">
+  <div style="padding:.75rem 1.25rem;background:#fff3cd;border:2px solid #ffc107;border-radius:8px;">
+    <div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;">
+      <span style="font-size:1.2rem;">⏳</span>
+      <strong style="font-size:.95rem;">Chip reads awaiting review:</strong>
+      <div id="pending-reads-list" style="display:flex;gap:.5rem;flex-wrap:wrap;"></div>
+    </div>
+  </div>
+</div>
+
+<!-- SI Event Log -->
+<div class="card">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.6rem;">
+    <h2 style="margin:0;">SI Reader Activity</h2>
+    <div style="display:flex;gap:.75rem;align-items:center;">
+      <span id="si-log-age" style="font-size:.78rem;color:var(--text-muted);"></span>
+      <a href="/api/si/log" target="_blank" style="font-size:.8rem;">Full log</a>
+    </div>
+  </div>
+  <div id="si-log"
+       style="font-family:monospace;font-size:.8rem;background:#1a1a1a;color:#d4d4d4;
+              border-radius:4px;padding:.6rem .8rem;min-height:60px;max-height:220px;
+              overflow-y:auto;line-height:1.7;">
+    <span style="color:#666;">Waiting for events…</span>
+  </div>
+</div>
+
+<script>
+// ── Pending chip reads ────────────────────────────────────────────────────────
+(function() {
+  var section = document.getElementById('pending-reads-section');
+  var list    = document.getElementById('pending-reads-list');
+
+  function fetchPending() {
+    fetch('/api/pending-reads')
+      .then(function(r) { return r.json(); })
+      .then(function(reads) {
+        if (!reads || reads.length === 0) {
+          section.style.display = 'none';
+          return;
+        }
+        section.style.display = '';
+        list.innerHTML = reads.map(function(r) {
+          var label = r.racer_names.join(', ') + ' / ' + r.course_names.join(', ')
+                    + ' (' + r.punch_count + ' punches, ' + r.received_at + ')';
+          return '<a href="/chip-review/' + r.si_chip + '" '
+               + 'style="display:inline-flex;align-items:center;gap:.35rem;padding:.3rem .75rem;'
+               + 'background:#fff;border:1px solid #ffc107;border-radius:6px;text-decoration:none;'
+               + 'font-size:.85rem;font-weight:600;color:#212529;">'
+               + '🔍 Review chip ' + r.si_chip + ' — ' + label
+               + '</a>';
+        }).join('');
+      })
+      .catch(function() {});
+  }
+
+  fetchPending();
+  setInterval(fetchPending, 3000);
+})();
+
+// ── Test print ────────────────────────────────────────────────────────────────
+function testPrint() {
+  var btn    = document.getElementById('test-print-btn');
+  var result = document.getElementById('test-print-result');
+  btn.disabled = true;
+  result.style.color = '';
+  result.textContent = 'Sending…';
+  fetch('/api/test-print', { method: 'POST' })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (d.ok) {
+        result.style.color = 'var(--success)';
+        result.textContent = '✓ ' + (d.msg || 'Sent!');
+      } else {
+        result.style.color = 'var(--danger)';
+        result.textContent = '✗ ' + d.error;
+      }
+      btn.disabled = false;
+    })
+    .catch(function() {
+      result.style.color = 'var(--danger)';
+      result.textContent = '✗ Network error';
+      btn.disabled = false;
+    });
+}
+
+// ── SI event log ──────────────────────────────────────────────────────────────
+(function() {
+  var el = document.getElementById('si-log');
+  var age = document.getElementById('si-log-age');
+  var lastFetch = 0;
+
+  function levelColor(msg) {
+    if (msg.startsWith('FATAL') || msg.startsWith('ERROR')) return '#f97583';
+    if (msg.startsWith('WARNING'))  return '#ffab70';
+    if (msg.startsWith('ACK') || msg.includes('beep') || msg.includes('scored')) return '#85e89d';
+    if (msg.startsWith('Card detected') || msg.startsWith('Chip ')) return '#79b8ff';
+    return '#d4d4d4';
+  }
+
+  function fetchEvents() {
+    fetch('/api/si/events')
+      .then(function(r) { return r.json(); })
+      .then(function(events) {
+        lastFetch = Date.now();
+        if (!events || events.length === 0) {
+          el.innerHTML = '<span style="color:#666;">No events yet — connect SI reader and read a chip.</span>';
+        } else {
+          el.innerHTML = events.map(function(e) {
+            return '<div><span style="color:#666;">' + e.time + '</span> '
+                 + '<span style="color:' + levelColor(e.msg) + ';">' + e.msg + '</span></div>';
+          }).join('');
+        }
+      })
+      .catch(function() {});
+  }
+
+  function updateAge() {
+    if (lastFetch) {
+      var secs = Math.round((Date.now() - lastFetch) / 1000);
+      age.textContent = 'updated ' + (secs < 2 ? 'just now' : secs + 's ago');
+    }
+  }
+
+  fetchEvents();
+  setInterval(fetchEvents, 3000);
+  setInterval(updateAge, 1000);
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Export{% endblock %}
+
+{% block page_header %}
+<div class="page-header">
+  <h1>Export</h1>
+  <p>Download results and course data.</p>
+</div>
+{% endblock %}
+
+{% block content %}
+
+<!-- Results exports -->
+<div class="card">
+  <h2>Results</h2>
+  <div style="display:flex;flex-direction:column;gap:.75rem;">
+
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;">
+      <div>
+        <strong>Class Results (printable)</strong>
+        <p style="font-size:.84rem;color:var(--text-muted);margin:.15rem 0 0;">
+          Self-contained HTML page grouped by class — open in any browser, print to PDF.
+        </p>
+      </div>
+      <a href="/export/results" target="_blank" class="btn btn-primary btn-sm">Open / Print</a>
+    </div>
+
+  </div>
+</div>
+
+<!-- Course control exports -->
+<div class="card">
+  <h2>Course Controls (CSV)</h2>
+  {% if courses %}
+  <p style="font-size:.84rem;color:var(--text-muted);margin-bottom:.75rem;">
+    Download the full control-point list for any course as a CSV file.
+  </p>
+  <table class="table" style="font-size:.88rem;">
+    <thead>
+      <tr><th>Course</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for c in courses %}
+      <tr>
+        <td>{{ c.name }}</td>
+        <td>
+          <a href="/courses/{{ c.id }}/export.csv"
+             class="btn btn-secondary btn-sm">↓ Download CSV</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p style="color:var(--text-muted);font-size:.88rem;">
+    No courses yet. <a href="/courses">Add a course</a> first.
+  </p>
+  {% endif %}
+</div>
+
+{% endblock %}

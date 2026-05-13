@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% block title %}Results{% endblock %}
+
+{% block page_header %}
+<div class="page-header">
+  <h1>Results</h1>
+  <p>Live scoring — updates on every chip read</p>
+</div>
+{% endblock %}
+
+{% block content %}
+
+<!-- Course filter -->
+<div class="card" style="padding:.75rem 1.25rem;">
+  <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;">
+    <span style="font-size:.8rem;text-transform:uppercase;color:var(--text-muted);font-weight:600;">Filter:</span>
+    <a href="/results" class="btn btn-sm {% if not selected_course_id %}btn-primary{% else %}btn-secondary{% endif %}">All</a>
+    {% for c in courses %}
+    <a href="/results?course_id={{ c.id }}"
+       class="btn btn-sm {% if selected_course_id == c.id %}btn-primary{% else %}btn-secondary{% endif %}">
+      {{ c.name }}
+    </a>
+    {% endfor %}
+  </div>
+</div>
+
+{% if ranked_with_adj %}
+<div class="card">
+  <h2>Leaderboard {% if selected_course_id %}— {{ courses | selectattr("id", "equalto", selected_course_id) | map(attribute="name") | first }}{% endif %}</h2>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Bib</th>
+          <th>Team</th>
+          <th>Course</th>
+          <th>Status</th>
+          <th>Controls</th>
+          <th title="Points from visited controls only">Raw</th>
+          <th title="Deduction for finishing late">Overtime</th>
+          <th title="Named bonus-type adjustments" style="color:var(--success);">Bonuses</th>
+          <th title="Named penalty-type adjustments" style="color:var(--danger);">Penalties</th>
+          <th title="Free-form manual adjustments">Manual</th>
+          <th>Total</th>
+          <th>Time</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for rank, r, adj in ranked_with_adj %}
+        <tr class="{% if rank == 1 %}rank-1{% elif rank == 2 %}rank-2{% elif rank == 3 %}rank-3{% endif %}">
+          <td><strong>{{ rank }}</strong></td>
+          <td>{{ r.racer.bib_number or "—" }}</td>
+          <td>{{ r.racer.name }}</td>
+          <td>{{ r.course.name }}</td>
+          <td>
+            <span class="badge badge-{{ r.entry.status.value | lower }}">{{ r.entry.status.value }}</span>
+            {% if r.order_violation %}<span class="badge badge-dnf" title="Order violation">OV</span>{% endif %}
+          </td>
+          <td>
+            {{ r.controls_visited | length }}
+            {% if r.controls_missed_mandatory %}
+            <span class="badge badge-dnf">-{{ r.controls_missed_mandatory | length }} mand.</span>
+            {% endif %}
+          </td>
+          <td>{{ r.raw_points }}</td>
+          <td>
+            {% if r.overtime_minutes %}
+            <span style="color:var(--danger);">-{{ r.overtime_penalty }}</span>
+            <span style="font-size:.75rem;color:var(--text-muted);">({{ r.overtime_minutes }}m)</span>
+            {% else %}—{% endif %}
+          </td>
+
+          {# Bonuses column — green #}
+          <td style="color:{% if adj.bonus > 0 %}var(--success){% else %}var(--text-muted){% endif %};">
+            {% if adj.bonus %}+{{ adj.bonus }}{% else %}—{% endif %}
+          </td>
+
+          {# Penalties column — red #}
+          <td style="color:{% if adj.penalty < 0 %}var(--danger){% else %}var(--text-muted){% endif %};">
+            {% if adj.penalty %}{{ adj.penalty }}{% else %}—{% endif %}
+          </td>
+
+          {# Manual column — signed colour #}
+          <td style="color:{% if adj.manual > 0 %}var(--success){% elif adj.manual < 0 %}var(--danger){% else %}var(--text-muted){% endif %};">
+            {% if adj.manual %}{{ "%+d" | format(adj.manual) }}{% else %}—{% endif %}
+          </td>
+
+          <td><strong>{{ r.total_points }}</strong></td>
+          <td>
+            {% if r.elapsed_seconds %}
+            {{ "%d:%02d:%02d" | format(r.elapsed_seconds // 3600, (r.elapsed_seconds % 3600) // 60, r.elapsed_seconds % 60) }}
+            {% else %}—{% endif %}
+          </td>
+          <td>
+            <a href="/results/{{ r.entry.id }}/receipt"
+               target="_blank"
+               class="btn btn-secondary btn-sm"
+               title="Print receipt for {{ r.racer.name }}">Print</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+<div class="card">
+  <p style="color:var(--text-muted);">No results yet. Results appear as racers finish and chips are read.</p>
+</div>
+{% endif %}
+
+{% endblock %}

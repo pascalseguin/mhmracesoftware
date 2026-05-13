@@ -1,0 +1,252 @@
+{% extends "base.html" %}
+{% block title %}Chip Review — {{ si_chip }}{% endblock %}
+
+{% block page_header %}
+<div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:.75rem;">
+  <div>
+    <h1>Chip Read Review</h1>
+    <p>Chip <strong>{{ si_chip }}</strong> · Read at {{ pending.received_at }} · {{ pending.punches | length }} punch{{ 'es' if pending.punches | length != 1 else '' }}</p>
+  </div>
+  <form method="post" action="/chip-review/{{ si_chip }}/discard"
+        onsubmit="return confirm('Discard this chip read? Nothing will be saved.')">
+    <button type="submit" class="btn btn-danger">✕ Discard Read</button>
+  </form>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{% if not previews %}
+<div class="card" style="text-align:center;padding:2rem;color:var(--text-muted);">
+  <p>No preview available — the entry or course data could not be loaded.</p>
+  <form method="post" action="/chip-review/{{ si_chip }}/discard" style="margin-top:1rem;">
+    <button type="submit" class="btn btn-danger">Discard</button>
+  </form>
+</div>
+{% endif %}
+
+{% for pv in previews %}
+{% set result = pv.result %}
+{% set course = pv.course %}
+{% set entry  = pv.entry %}
+
+<form method="post" action="/chip-review/{{ si_chip }}/save" id="save-form-{{ loop.index }}">
+
+  <div class="card" style="margin-bottom:1rem;">
+
+    {# ── Header row ── #}
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:.5rem;margin-bottom:1.25rem;">
+      <div>
+        <h2 style="margin:0;">{{ result.racer.name }}</h2>
+        <span style="font-size:.85rem;color:var(--text-muted);">{{ course.name }}</span>
+        {% if result.racer.bib_number %}
+        <span style="font-size:.82rem;color:var(--text-muted);margin-left:.5rem;">Bib #{{ result.racer.bib_number }}</span>
+        {% endif %}
+      </div>
+      <div style="text-align:right;">
+        <span style="font-family:var(--font-heading);font-size:2rem;color:var(--accent);">{{ result.total_points }}<span style="font-size:1rem;opacity:.6;">pts</span></span>
+        {% if result.overtime_minutes %}
+        <div style="font-size:.8rem;color:var(--danger);">
+          {{ result.overtime_minutes }}min over — −{{ result.overtime_penalty }}pts
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    {# ── Two-column: timing + score breakdown ── #}
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin-bottom:1.25rem;">
+
+      <div>
+        <p style="font-size:.78rem;font-weight:600;text-transform:uppercase;color:var(--text-muted);margin:0 0 .4rem;">Timing</p>
+        <table style="font-size:.85rem;width:100%;">
+          <tr>
+            <td style="color:var(--text-muted);padding:.1rem .4rem .1rem 0;">Start</td>
+            <td>{{ result.entry.start_time.strftime('%H:%M:%S') if result.entry.start_time else '—' }}</td>
+          </tr>
+          <tr>
+            <td style="color:var(--text-muted);padding:.1rem .4rem .1rem 0;">Finish</td>
+            <td>{{ pending.finish_time.strftime('%H:%M:%S') if pending.finish_time else '—' }}</td>
+          </tr>
+          <tr>
+            <td style="color:var(--text-muted);padding:.1rem .4rem .1rem 0;">Elapsed</td>
+            <td>
+              {% if result.elapsed_seconds is not none %}
+                {% set h = (result.elapsed_seconds // 3600) %}
+                {% set m = (result.elapsed_seconds % 3600) // 60 %}
+                {% set s = result.elapsed_seconds % 60 %}
+                {{ '%d:%02d:%02d' | format(h, m, s) }}
+              {% else %}—{% endif %}
+            </td>
+          </tr>
+          <tr>
+            <td style="color:var(--text-muted);padding:.1rem .4rem .1rem 0;">Overtime</td>
+            <td style="color:{% if result.overtime_minutes %}var(--danger){% else %}var(--text-muted){% endif %};">
+              {% if result.overtime_minutes %}{{ result.overtime_minutes }}min (−{{ result.overtime_penalty }}pts){% else %}None{% endif %}
+            </td>
+          </tr>
+        </table>
+      </div>
+
+      <div>
+        <p style="font-size:.78rem;font-weight:600;text-transform:uppercase;color:var(--text-muted);margin:0 0 .4rem;">Score Breakdown</p>
+        <table style="font-size:.85rem;width:100%;">
+          <tr>
+            <td style="color:var(--text-muted);padding:.1rem .4rem .1rem 0;">Controls</td>
+            <td>{{ result.controls_visited | length }} visited · {{ result.raw_points + result.overtime_penalty }}pts</td>
+          </tr>
+          {% if result.controls_missed_mandatory %}
+          <tr>
+            <td style="color:var(--danger);padding:.1rem .4rem .1rem 0;">Mandatory missed</td>
+            <td style="color:var(--danger);">{{ result.controls_missed_mandatory | length }}</td>
+          </tr>
+          {% endif %}
+          {% if result.circuit_violations %}
+          <tr>
+            <td style="color:var(--danger);padding:.1rem .4rem .1rem 0;">Circuit violations</td>
+            <td style="color:var(--danger);">{{ result.circuit_violations | join(', ') }}</td>
+          </tr>
+          {% endif %}
+          <tr>
+            <td style="color:var(--danger);padding:.1rem .4rem .1rem 0;">Overtime</td>
+            <td style="color:{% if result.overtime_penalty %}var(--danger){% else %}var(--text-muted){% endif %};">
+              {% if result.overtime_penalty %}−{{ result.overtime_penalty }}pts{% else %}—{% endif %}
+            </td>
+          </tr>
+          <tr style="border-top:1px solid var(--border);font-weight:700;">
+            <td style="padding:.25rem .4rem .1rem 0;">Total</td>
+            <td>{{ result.total_points }}pts</td>
+          </tr>
+        </table>
+      </div>
+    </div>
+
+    {# ── Controls visited ── #}
+    <div style="margin-bottom:1rem;">
+      <p style="font-size:.78rem;font-weight:600;text-transform:uppercase;color:var(--text-muted);margin:0 0 .4rem;">
+        Controls visited ({{ result.controls_visited | length }})
+      </p>
+      {% if result.controls_visited %}
+      <div style="display:flex;flex-wrap:wrap;gap:.3rem;">
+        {% for ctrl in result.controls_visited %}
+        <span style="display:inline-flex;align-items:center;gap:.25rem;padding:.2rem .5rem;
+                     background:#f0fdf4;border:1px solid #bbf7d0;border-radius:4px;font-size:.8rem;">
+          <code style="font-size:.75rem;">{{ ctrl.si_code }}</code>
+          {% if ctrl.name %}<span>{{ ctrl.name }}</span>{% endif %}
+          <span style="color:var(--success);font-weight:600;">+{{ ctrl.points }}</span>
+        </span>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p style="color:var(--danger);font-size:.85rem;font-weight:600;">
+        ⚠ No controls matched — possible wrong chip or wrong course.
+      </p>
+      {% endif %}
+    </div>
+
+    {# ── Unmatched punches ── #}
+    {% if result.unmatched_punch_codes %}
+    <div style="margin-bottom:1rem;padding:.5rem .75rem;background:#fff3cd;border:1px solid #ffc107;border-radius:6px;">
+      <p style="font-size:.78rem;font-weight:600;color:#856404;margin:0 0 .2rem;">
+        Unmatched punches ({{ result.unmatched_punch_codes | length }}) — not configured as controls:
+      </p>
+      <div style="display:flex;flex-wrap:wrap;gap:.3rem;">
+        {% for code in result.unmatched_punch_codes %}
+        <code style="background:#fef3c7;padding:.1rem .35rem;border-radius:3px;font-size:.8rem;">{{ code }}</code>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    {# ── Quick Adjustments ── #}
+    <div style="border-top:1px solid var(--border);padding-top:1rem;">
+      <p style="font-size:.78rem;font-weight:600;text-transform:uppercase;color:var(--text-muted);margin:0 0 .75rem;">
+        Quick Adjustments (optional)
+      </p>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;">
+
+        {# Add missing punches #}
+        <div>
+          <p style="font-size:.82rem;font-weight:600;margin:0 0 .4rem;">Add missing punches</p>
+          <p style="font-size:.78rem;color:var(--text-muted);margin:0 0 .5rem;">
+            Check controls the team visited but the chip didn't record. Added as manual punches.
+          </p>
+          {% if pv.unvisited_controls %}
+          <div style="display:flex;flex-direction:column;gap:.25rem;max-height:180px;overflow-y:auto;">
+            {% for ctrl in pv.unvisited_controls %}
+            <label style="display:flex;align-items:center;gap:.4rem;font-size:.83rem;cursor:pointer;">
+              <input type="checkbox" name="manual_punch" value="{{ ctrl.si_code }}">
+              <code style="font-size:.75rem;color:var(--text-muted);">{{ ctrl.si_code }}</code>
+              {% if ctrl.name %}<span>{{ ctrl.name }}</span>{% endif %}
+              <span style="color:var(--success);font-size:.78rem;">+{{ ctrl.points }}pts</span>
+              {% if ctrl.is_mandatory %}
+              <span class="badge badge-ok" style="font-size:.7rem;">mandatory</span>
+              {% endif %}
+            </label>
+            {% endfor %}
+          </div>
+          {% else %}
+          <p style="font-size:.82rem;color:var(--text-muted);">All configured controls were visited.</p>
+          {% endif %}
+        </div>
+
+        {# Overtime adjustment #}
+        <div>
+          <p style="font-size:.82rem;font-weight:600;margin:0 0 .4rem;">Overtime penalty</p>
+          {% if result.overtime_minutes %}
+          <p style="font-size:.78rem;color:var(--text-muted);margin:0 0 .5rem;">
+            Calculated: {{ result.overtime_minutes }}min over = −{{ result.overtime_penalty }}pts
+          </p>
+          <label style="display:flex;align-items:center;gap:.4rem;font-size:.83rem;cursor:pointer;margin-bottom:.5rem;">
+            <input type="checkbox" name="overtime_waive" value="1" id="waive-{{ loop.index }}"
+                   onchange="toggleOvertimeAdjust(this,'adj-{{ loop.index }}')">
+            Waive overtime penalty (+{{ result.overtime_penalty }}pts adjustment)
+          </label>
+          <div id="adj-{{ loop.index }}" style="display:flex;gap:.4rem;align-items:center;">
+            <label style="font-size:.82rem;color:var(--text-muted);">Custom adjustment (signed pts):</label>
+            <input type="number" name="overtime_adjust" placeholder="e.g. +30 or -10"
+                   style="width:100px;font-size:.82rem;">
+          </div>
+          {% else %}
+          <p style="font-size:.82rem;color:var(--text-muted);">No overtime — team finished within the time limit.</p>
+          <div style="display:flex;gap:.4rem;align-items:center;margin-top:.3rem;">
+            <label style="font-size:.82rem;color:var(--text-muted);">Manual time adjustment (signed pts):</label>
+            <input type="number" name="overtime_adjust" placeholder="e.g. +30 or -10"
+                   style="width:100px;font-size:.82rem;">
+          </div>
+          {% endif %}
+        </div>
+
+      </div>
+    </div>
+
+    {# ── Submit buttons ── #}
+    <div style="margin-top:1.25rem;display:flex;gap:.75rem;align-items:center;">
+      <button type="submit" class="btn btn-primary" style="font-size:1rem;padding:.5rem 1.5rem;">
+        ✓ Save &amp; Print Receipt
+      </button>
+      <form method="post" action="/chip-review/{{ si_chip }}/discard"
+            onsubmit="return confirm('Discard this chip read? Nothing will be saved.')"
+            style="margin:0;">
+        <button type="submit" class="btn btn-secondary">✕ Discard</button>
+      </form>
+    </div>
+
+  </div>
+
+</form>
+{% endfor %}
+
+<script>
+function toggleOvertimeAdjust(cb, adjId) {
+  var div = document.getElementById(adjId);
+  if (!div) return;
+  var inp = div.querySelector('input[name="overtime_adjust"]');
+  if (inp) {
+    inp.disabled = cb.checked;
+    div.style.opacity = cb.checked ? '.4' : '1';
+  }
+}
+</script>
+
+{% endblock %}

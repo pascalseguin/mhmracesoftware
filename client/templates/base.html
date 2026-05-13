@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}MHM Race{% endblock %} — MHM Race Management</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<nav>
+  <span class="brand">{{ cfg.race_name }} {{ cfg.race_year }}</span>
+  <ul>
+    <li><a href="/" {% if request.url.path == "/" %}class="active"{% endif %}>Dashboard</a></li>
+
+    {# Setup — Racers, Classes, Courses, Import #}
+    {% set setup_active = request.url.path.startswith("/racers") or request.url.path.startswith("/classes") or request.url.path.startswith("/courses") or request.url.path.startswith("/chips") or request.url.path.startswith("/import") %}
+    <li class="dropdown {% if setup_active %}active{% endif %}">
+      <span class="nav-label">Setup ▾</span>
+      <div class="dropdown-menu">
+        <a href="/racers"  {% if request.url.path.startswith("/racers")  %}class="active"{% endif %}>Racers</a>
+        <a href="/classes" {% if request.url.path.startswith("/classes") %}class="active"{% endif %}>Classes</a>
+        <a href="/courses" {% if request.url.path.startswith("/courses") %}class="active"{% endif %}>Courses</a>
+        <a href="/chips"   {% if request.url.path.startswith("/chips")   %}class="active"{% endif %}>Chips</a>
+        <hr>
+        <a href="/import"  {% if request.url.path.startswith("/import")  %}class="active"{% endif %}>Import</a>
+      </div>
+    </li>
+
+    {# Points — Results, Adjustments, Bonus/Penalty Types #}
+    {% set points_active = request.url.path == "/results" or request.url.path.startswith("/results/") or request.url.path.startswith("/adjustments") or request.url.path.startswith("/adjustment-types") %}
+    <li class="dropdown {% if points_active %}active{% endif %}">
+      <span class="nav-label">Points ▾</span>
+      <div class="dropdown-menu">
+        <a href="/results" {% if request.url.path == "/results" %}class="active"{% endif %}>Leaderboard</a>
+        {% if request.session.get("user") %}
+        <a href="/results/manage" {% if request.url.path == "/results/manage" %}class="active"{% endif %}>Manage Statuses</a>
+        {% endif %}
+        <a href="/adjustments" {% if request.url.path.startswith("/adjustments") and not request.url.path.startswith("/adjustment-types") %}class="active"{% endif %}>Adjustments</a>
+        <a href="/adjustment-types" {% if request.url.path.startswith("/adjustment-types") %}class="active"{% endif %}>Bonus/Penalty Types</a>
+      </div>
+    </li>
+
+    <li><a href="/export" {% if request.url.path.startswith("/export") %}class="active"{% endif %}>Export</a></li>
+
+    {# System — Settings, Server #}
+    {% set system_active = request.url.path.startswith("/settings") or request.url.path.startswith("/server-setup") %}
+    <li class="dropdown {% if system_active %}active{% endif %}">
+      <span class="nav-label">System ▾</span>
+      <div class="dropdown-menu">
+        <a href="/settings"     {% if request.url.path.startswith("/settings")     %}class="active"{% endif %}>Settings</a>
+        <a href="/server-setup" {% if request.url.path.startswith("/server-setup") %}class="active"{% endif %}>Server Sync</a>
+      </div>
+    </li>
+
+    {% if request.session.get("user") %}
+    <li><a href="/logout" style="color:rgba(255,255,255,0.55);">Logout</a></li>
+    {% endif %}
+  </ul>
+</nav>
+
+{% block page_header %}{% endblock %}
+
+<div class="container">
+  {% if msg %}
+  <div class="flash">{{ msg }}</div>
+  {% endif %}
+
+  {% block content %}{% endblock %}
+</div>
+
+</body>
+</html>

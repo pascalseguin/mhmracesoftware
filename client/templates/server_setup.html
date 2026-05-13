@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+{% block title %}Server Setup{% endblock %}
+
+{% block page_header %}
+<div class="page-header">
+  <h1>Server Setup</h1>
+  <p>Deploy the public results server so teams can follow live scoring</p>
+</div>
+{% endblock %}
+
+{% block content %}
+
+<div class="card">
+  <h2>What the Server Does</h2>
+  <p style="margin-bottom:.75rem;">
+    The server is a lightweight FastAPI app that receives synced data from this client and
+    serves a public live-results page at your domain. The client running at the event venue
+    pushes race data every 30 seconds (or on demand).
+  </p>
+  <p>
+    The server only needs to run during race day. You can host it on any Linux VPS, a Raspberry Pi,
+    or a cheap cloud instance (e.g. DigitalOcean $4/month droplet).
+  </p>
+</div>
+
+<div class="card">
+  <h2>Option 1 — Docker (recommended)</h2>
+
+  <p style="margin-bottom:.75rem;">Requires Docker installed on your server. SSH in and run:</p>
+
+  <pre style="background:#1a1a1a;color:#f4f4f4;padding:1rem;border-radius:6px;overflow-x:auto;font-size:.85rem;line-height:1.6;"><code># Pull the project onto the server
+git clone https://github.com/your-org/mhm-race.git
+cd mhm-race
+
+# Set your API key (choose any random string)
+echo "MHM_API_KEY=your-secret-key" > .env
+
+# Start
+docker compose up -d</code></pre>
+
+  <p style="margin-top:.75rem;color:var(--text-muted);font-size:.88rem;">
+    The server will be available on port 8000. Point a reverse proxy (nginx/Caddy) at it
+    or open port 8000 in your firewall for direct access.
+  </p>
+</div>
+
+<div class="card">
+  <h2>Option 2 — Manual Python</h2>
+
+  <pre style="background:#1a1a1a;color:#f4f4f4;padding:1rem;border-radius:6px;overflow-x:auto;font-size:.85rem;line-height:1.6;"><code># On the server (Python 3.11+ required)
+git clone https://github.com/your-org/mhm-race.git
+cd mhm-race
+pip install -r requirements.txt
+
+# Set env vars (or put in .env and source it)
+export MHM_API_KEY=your-secret-key
+export MHM_HOST=0.0.0.0
+export MHM_PORT=8000
+
+python run_server.py</code></pre>
+
+  <p style="margin-top:.75rem;color:var(--text-muted);font-size:.88rem;">
+    To keep it running after you disconnect: use <code>screen</code>, <code>tmux</code>,
+    or create a systemd service.
+  </p>
+
+  <details style="margin-top:1rem;">
+    <summary style="cursor:pointer;font-size:.88rem;font-weight:600;color:var(--accent);">
+      Systemd service (click to expand)
+    </summary>
+    <pre style="background:#1a1a1a;color:#f4f4f4;padding:1rem;border-radius:6px;overflow-x:auto;font-size:.82rem;margin-top:.5rem;line-height:1.6;"><code>[Unit]
+Description=MHM Race Server
+After=network.target
+
+[Service]
+User=ubuntu
+WorkingDirectory=/home/ubuntu/mhm-race
+Environment="MHM_API_KEY=your-secret-key"
+Environment="MHM_HOST=0.0.0.0"
+Environment="MHM_PORT=8000"
+ExecStart=/usr/bin/python3 run_server.py
+Restart=always
+
+[Install]
+WantedBy=multi-user.target</code></pre>
+    <p style="font-size:.82rem;color:var(--text-muted);margin-top:.5rem;">
+      Save to <code>/etc/systemd/system/mhm.service</code>, then:
+      <code>sudo systemctl enable --now mhm</code>
+    </p>
+  </details>
+</div>
+
+<div class="card">
+  <h2>Nginx Reverse Proxy (HTTPS)</h2>
+  <pre style="background:#1a1a1a;color:#f4f4f4;padding:1rem;border-radius:6px;overflow-x:auto;font-size:.85rem;line-height:1.6;"><code>server {
+    listen 80;
+    server_name results.mhmassacre.ca;
+
+    location / {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+}
+</code></pre>
+  <p style="margin-top:.5rem;font-size:.88rem;color:var(--text-muted);">
+    Use <code>certbot --nginx</code> to add free HTTPS automatically.
+  </p>
+</div>
+
+<div class="card">
+  <h2>Connecting the Client</h2>
+  <p style="margin-bottom:.75rem;">Once the server is running, go to <a href="/settings">Settings</a> and enter:</p>
+  <table style="width:auto;font-size:.88rem;">
+    <tr>
+      <td style="padding:.3rem 1rem .3rem 0;color:var(--text-muted);">Server URL</td>
+      <td><code>https://results.mhmassacre.ca</code> (or your IP/domain)</td>
+    </tr>
+    <tr>
+      <td style="padding:.3rem 1rem .3rem 0;color:var(--text-muted);">API Key</td>
+      <td>The same value you set as <code>MHM_API_KEY</code> on the server</td>
+    </tr>
+    <tr>
+      <td style="padding:.3rem 1rem .3rem 0;color:var(--text-muted);">Sync Interval</td>
+      <td>30 seconds is fine for race day</td>
+    </tr>
+  </table>
+</div>
+
+<div class="card">
+  <h2>Dockerfile (for reference)</h2>
+  <pre style="background:#1a1a1a;color:#f4f4f4;padding:1rem;border-radius:6px;overflow-x:auto;font-size:.85rem;line-height:1.6;"><code>FROM python:3.12-slim
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY . .
+ENV MHM_HOST=0.0.0.0
+ENV MHM_PORT=8000
+CMD ["python", "run_server.py"]</code></pre>
+
+  <p style="margin-top:.75rem;font-size:.88rem;color:var(--text-muted);">
+    The <code>docker-compose.yml</code> exposes port 8000 and mounts a volume for the SQLite database
+    so data survives container restarts.
+  </p>
+  <pre style="background:#1a1a1a;color:#f4f4f4;padding:1rem;border-radius:6px;overflow-x:auto;font-size:.85rem;line-height:1.6;margin-top:.5rem;"><code>services:
+  server:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - MHM_API_KEY=${MHM_API_KEY}
+    restart: unless-stopped</code></pre>
+</div>
+
+{% endblock %}

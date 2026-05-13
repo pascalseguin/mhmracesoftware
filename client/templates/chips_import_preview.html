@@ -1,0 +1,162 @@
+{% extends "base.html" %}
+{% block title %}Chip Import Preview{% endblock %}
+
+{% block page_header %}
+<div class="page-header">
+  <h1>Chip Import Preview</h1>
+  <p>Review the matches before committing. Uncheck any row you want to skip.</p>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{# ── Summary bar ─────────────────────────────────────────────────────────── #}
+<div style="display:flex;gap:1rem;margin-bottom:1.25rem;flex-wrap:wrap;">
+  <span class="badge" style="background:var(--success);color:#fff;padding:.3rem .7rem;border-radius:4px;font-size:.87rem;">
+    {{ n_ok }} row(s) ready
+  </span>
+  {% if n_warn %}
+  <span class="badge" style="background:#f0a500;color:#fff;padding:.3rem .7rem;border-radius:4px;font-size:.87rem;">
+    {{ n_warn }} fuzzy match(es) — review carefully
+  </span>
+  {% endif %}
+  {% if n_error %}
+  <span class="badge" style="background:var(--danger);color:#fff;padding:.3rem .7rem;border-radius:4px;font-size:.87rem;">
+    {{ n_error }} row(s) with errors — will be skipped
+  </span>
+  {% endif %}
+  <a href="/chips" style="margin-left:auto;font-size:.85rem;align-self:center;">← Back to Chips</a>
+</div>
+
+{% if not plan %}
+<div class="card">
+  <p style="color:var(--text-muted);">No data rows found in the pasted CSV. Check the format and try again.</p>
+  <a href="/chips" class="btn btn-secondary">Back</a>
+</div>
+{% else %}
+
+<form method="post" action="/chips/import-assignments/confirm">
+  <input type="hidden" name="token" value="{{ token }}">
+
+  {# Select all / none helpers #}
+  <div style="margin-bottom:.6rem;font-size:.83rem;">
+    <a href="#" onclick="setAll(true);return false;">Select all</a> ·
+    <a href="#" onclick="setAll(false);return false;">Select none</a>
+  </div>
+
+  {% for item in plan %}{% set i = loop.index0 %}
+  <div class="card" style="margin-bottom:.75rem;
+       {% if item.error %}border-left:4px solid var(--danger);opacity:.75;
+       {% elif item.match_type == 'fuzzy' %}border-left:4px solid #f0a500;
+       {% else %}border-left:4px solid var(--success);{% endif %}">
+
+    <div style="display:flex;align-items:flex-start;gap:.75rem;">
+
+      {# Checkbox — disabled for error rows #}
+      <div style="padding-top:.15rem;">
+        <input type="checkbox"
+               name="include_{{ i }}"
+               id="inc_{{ i }}"
+               class="row-check"
+               {% if not item.error and (item.match_type == 'exact' or item.match_type == 'fuzzy') %}checked{% endif %}
+               {% if item.error %}disabled{% endif %}
+               style="width:16px;height:16px;cursor:pointer;">
+      </div>
+
+      <div style="flex:1;">
+        {# Row header: CSV name → matched racer #}
+        <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin-bottom:.4rem;">
+          <strong>{{ item.team_name }}</strong>
+
+          {% if item.racer_name %}
+            <span style="color:var(--text-muted);">→</span>
+            <span>{{ item.racer_name }}</span>
+            {% if item.match_type == 'exact' %}
+            <span style="font-size:.75rem;background:var(--success);color:#fff;
+                         padding:.1rem .4rem;border-radius:3px;">exact</span>
+            {% elif item.match_type == 'fuzzy' %}
+            <span style="font-size:.75rem;background:#f0a500;color:#fff;
+                         padding:.1rem .4rem;border-radius:3px;">
+              fuzzy {{ (item.match_score * 100) | int }}%
+            </span>
+            {% endif %}
+          {% endif %}
+
+          {% if item.error %}
+          <span style="font-size:.8rem;color:var(--danger);font-style:italic;">
+            ✗ {{ item.error }}
+          </span>
+          {% endif %}
+        </div>
+
+        {# Assignment rows #}
+        {% if item.assignments %}
+        <table style="font-size:.83rem;border-collapse:collapse;width:100%;">
+          <thead>
+            <tr style="color:var(--text-muted);">
+              <th style="text-align:left;padding:.15rem .5rem .15rem 0;width:80px;">Activity</th>
+              <th style="text-align:left;padding:.15rem .5rem;">Chip Name</th>
+              <th style="text-align:left;padding:.15rem .5rem;">SI Code</th>
+              <th style="text-align:left;padding:.15rem .5rem;">Library</th>
+              <th style="text-align:left;padding:.15rem .5rem;">Course</th>
+              <th style="text-align:left;padding:.15rem .5rem;">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for asgn in item.assignments %}
+            <tr style="border-top:1px solid var(--border);">
+              <td style="padding:.25rem .5rem .25rem 0;text-transform:capitalize;font-weight:600;">
+                {{ asgn.activity }}
+              </td>
+              <td style="padding:.25rem .5rem;font-family:monospace;">{{ asgn.chip_name }}</td>
+              <td style="padding:.25rem .5rem;font-family:monospace;">{{ asgn.chip_si }}</td>
+              <td style="padding:.25rem .5rem;">
+                {% if asgn.chip_in_library %}
+                <span style="color:var(--text-muted);font-size:.8rem;">exists</span>
+                {% else %}
+                <span style="color:var(--success);font-size:.8rem;">+ add</span>
+                {% endif %}
+              </td>
+              <td style="padding:.25rem .5rem;">
+                {% if asgn.course_name %}
+                  {{ asgn.course_name }}
+                {% else %}
+                  <span style="color:var(--text-muted);">—</span>
+                {% endif %}
+              </td>
+              <td style="padding:.25rem .5rem;">
+                {% if asgn.ok %}
+                <span style="color:var(--success);">✓ assign</span>
+                {% else %}
+                <span style="color:var(--danger);font-size:.8rem;" title="{{ asgn.skip_reason }}">
+                  ✗ skip{% if asgn.skip_reason %} — {{ asgn.skip_reason }}{% endif %}
+                </span>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% elif not item.error %}
+        <p style="font-size:.83rem;color:var(--text-muted);">No activity columns detected for this row.</p>
+        {% endif %}
+
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+
+  <div style="display:flex;gap:.75rem;margin-top:.5rem;">
+    <button type="submit" class="btn btn-primary">Confirm Import</button>
+    <a href="/chips" class="btn btn-secondary">Cancel</a>
+  </div>
+</form>
+{% endif %}
+
+<script>
+function setAll(checked) {
+  document.querySelectorAll('.row-check:not([disabled])')
+    .forEach(function(cb) { cb.checked = checked; });
+}
+</script>
+{% endblock %}

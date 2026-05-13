@@ -1,0 +1,10 @@
+services:
+  server:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - MHM_API_KEY=${MHM_API_KEY}
+    restart: unless-stopped

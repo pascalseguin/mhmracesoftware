@@ -1,0 +1,396 @@
+{% extends "base.html" %}
+{% block title %}Teams{% endblock %}
+
+{% block page_header %}
+<div class="page-header">
+  <h1>Team Registration</h1>
+  <p>Select a team on the left to view and edit their details</p>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{% if msg %}
+<div class="alert alert-success" style="margin-bottom:1rem;padding:.6rem 1rem;background:#d4edda;border:1px solid #c3e6cb;border-radius:4px;color:#155724;font-size:.88rem;">
+  {{ msg }}
+</div>
+{% endif %}
+
+<div style="display:grid;grid-template-columns:280px 1fr;gap:1rem;align-items:start;">
+
+  <!-- ── Left panel: racer list ─────────────────────────────────────────────── -->
+  <div class="card" style="padding:.75rem;position:sticky;top:1rem;max-height:calc(100vh - 140px);display:flex;flex-direction:column;">
+
+    <!-- Add Team toggle -->
+    <details id="add-team-details" style="margin-bottom:.6rem;">
+      <summary class="btn btn-primary btn-sm" style="cursor:pointer;list-style:none;text-align:center;width:100%;">+ Add Team</summary>
+      <div style="margin-top:.6rem;padding:.75rem;background:var(--bg);border:1px solid var(--border);border-radius:6px;">
+        <form method="post" action="/racers/add">
+          <div class="form-group" style="margin-bottom:.4rem;">
+            <label>Bib #</label>
+            <input type="text" name="bib_number" style="width:100%;" placeholder="101">
+          </div>
+          <div class="form-group" style="margin-bottom:.4rem;">
+            <label>Team Name *</label>
+            <input type="text" name="name" required style="width:100%;">
+          </div>
+          <div class="form-group" style="margin-bottom:.6rem;">
+            <label>Class</label>
+            <select name="class_id" style="width:100%;">
+              <option value="">— None —</option>
+              {% for cls in classes %}
+              <option value="{{ cls.id }}">{{ cls.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <button type="submit" class="btn btn-primary btn-sm" style="width:100%;">Add Team</button>
+        </form>
+      </div>
+    </details>
+
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.3rem;">
+      <p style="font-size:.78rem;font-weight:600;text-transform:uppercase;color:var(--text-muted);margin:0;">
+        Teams ({{ racers | length }})
+      </p>
+      <span style="font-size:.75rem;color:var(--text-muted);">
+        <a href="#" onclick="selectAll(true);return false;">All</a> ·
+        <a href="#" onclick="selectAll(false);return false;">None</a>
+      </span>
+    </div>
+    <input id="racer-search" type="text" placeholder="Search name or bib…"
+           oninput="filterRacers(this.value)"
+           style="width:100%;margin-bottom:.5rem;font-size:.85rem;">
+    <div id="racer-list" style="overflow-y:auto;flex:1;">
+      {% for r in racers %}
+      <div class="racer-wrap" data-search="{{ (r.bib_number | string) }} {{ r.name | lower }} {{ (r.class_name or '') | lower }}"
+           style="display:flex;align-items:center;gap:.3rem;margin-bottom:2px;">
+        <input type="checkbox" class="racer-select" data-id="{{ r.id }}"
+               style="flex-shrink:0;cursor:pointer;width:14px;height:14px;">
+        <a href="/racers?racer_id={{ r.id }}"
+           class="racer-item {% if selected_racer_id == r.id %}selected{% endif %}"
+           style="display:flex;flex:1;justify-content:space-between;align-items:center;
+                  padding:.35rem .5rem;border-radius:4px;text-decoration:none;
+                  color:var(--text);min-width:0;
+                  {% if selected_racer_id == r.id %}background:var(--accent);color:#fff;{% endif %}">
+          <span>
+            <span style="font-size:.75rem;opacity:.7;margin-right:.3rem;">#{{ r.bib_number or "—" }}</span>
+            <strong style="font-size:.88rem;">{{ r.name }}</strong>
+            {% if r.class_name %}
+            <br><span style="font-size:.75rem;opacity:.7;">{{ r.class_name }}</span>
+            {% endif %}
+          </span>
+        </a>
+      </div>
+      {% else %}
+      <p style="color:var(--text-muted);font-size:.85rem;">No teams yet.</p>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- ── Right panel: racer detail ─────────────────────────────────────────── -->
+  <div>
+  {% if selected_racer %}
+  {% set r = selected_racer %}
+
+  <div class="card">
+
+    <!-- Header -->
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:.5rem;margin-bottom:1rem;">
+      <div>
+        <span style="font-family:var(--font-heading);font-size:1.4rem;color:var(--accent);">#{{ r.bib_number or "—" }}</span>
+        <span style="font-family:var(--font-heading);font-size:1.1rem;margin-left:.4rem;text-transform:uppercase;">{{ r.name }}</span>
+        {% if r.class_name %}<span class="badge badge-active" style="margin-left:.5rem;">{{ r.class_name }}</span>{% endif %}
+        {# Status dropdown — applies to ALL course entries for this racer at once #}
+        {% if selected_entries %}
+        {% set cur_status = selected_entries[0].status %}
+        <form method="post" action="/racers/{{ r.id }}/status" style="display:inline-block;margin-left:.75rem;vertical-align:middle;">
+          <select name="status" onchange="this.form.submit()"
+                  style="font-size:.85rem;padding:.2rem .35rem;border-radius:4px;font-weight:600;cursor:pointer;
+                         border:2px solid {{ STATUS_COLORS[cur_status] }};color:{{ STATUS_COLORS[cur_status] }};background:white;">
+            {% for s in ALL_STATUSES %}
+            <option value="{{ s }}" {% if cur_status == s %}selected{% endif %}>{{ STATUS_LABELS[s] }}</option>
+            {% endfor %}
+          </select>
+        </form>
+        {% endif %}
+      </div>
+      <div style="display:flex;gap:.5rem;">
+        <a href="/racers/{{ r.id }}/export" target="_blank" class="btn btn-secondary btn-sm">&#8681; Export Card</a>
+        <form method="post" action="/racers/{{ r.id }}/delete"
+              onsubmit="return confirm('Delete team {{ r.name }}? This removes all their entries and punches.')">
+          <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+        </form>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;">
+
+      <!-- Edit racer info -->
+      <div>
+        <p style="font-size:.78rem;text-transform:uppercase;font-weight:600;color:var(--text-muted);margin-bottom:.5rem;">Team Details</p>
+        <form method="post" action="/racers/{{ r.id }}/edit">
+          <div class="form-group" style="margin-bottom:.4rem;">
+            <label>Bib #</label>
+            <input type="text" name="bib_number" value="{{ r.bib_number }}" style="width:100px;">
+          </div>
+          <div class="form-group" style="margin-bottom:.4rem;">
+            <label>Team Name *</label>
+            <input type="text" name="name" value="{{ r.name }}" required style="width:100%;">
+          </div>
+          <div class="form-group" style="margin-bottom:.6rem;">
+            <label>Class</label>
+            <select name="class_id" style="width:100%;">
+              <option value="">— None —</option>
+              {% for cls in classes %}
+              <option value="{{ cls.id }}" {% if r.class_id == cls.id %}selected{% endif %}>{{ cls.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <button type="submit" class="btn btn-primary btn-sm">Save Changes</button>
+        </form>
+      </div>
+
+      <!-- Merge -->
+      <div>
+        <p style="font-size:.78rem;text-transform:uppercase;font-weight:600;color:var(--text-muted);margin-bottom:.5rem;">Merge Into Another Team</p>
+        <p style="font-size:.82rem;color:var(--text-muted);margin-bottom:.5rem;">
+          Moves this team's course entries to the target, then deletes this record.
+          If both teams have entries for the same course, the target's entries are kept.
+        </p>
+        <form method="post" action="/racers/{{ r.id }}/merge"
+              onsubmit="return confirm('Merge {{ r.name }} into the selected team? This cannot be undone.')">
+          <div style="display:flex;gap:.5rem;align-items:flex-end;flex-wrap:wrap;">
+            <div class="form-group" style="flex:1;">
+              <label>Target Team</label>
+              <select name="target_id" style="width:100%;">
+                {% for other in racers %}
+                {% if other.id != r.id %}
+                <option value="{{ other.id }}">#{{ other.bib_number or "?" }} {{ other.name }}</option>
+                {% endif %}
+                {% endfor %}
+              </select>
+            </div>
+            <button type="submit" class="btn btn-danger btn-sm">Merge</button>
+          </div>
+        </form>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Course entries -->
+  <div class="card" style="margin-top:1rem;">
+    <p style="font-size:.78rem;text-transform:uppercase;font-weight:600;color:var(--text-muted);margin-bottom:.75rem;">Course Entries</p>
+
+    {% if selected_entries %}
+    <div class="table-wrap" style="margin-bottom:1rem;">
+      <table>
+        <thead>
+          <tr><th>Course</th><th>SI Chip</th><th>Start</th><th>Finish</th><th>Status</th><th>Score</th><th colspan="2"></th></tr>
+        </thead>
+        <tbody>
+          {% for e in selected_entries %}
+          {% set sr = selected_results.get(e.course_id) %}
+          {# Flag when punches exist but none matched — wrong chip/course warning #}
+          {% set wrong_course = sr and sr.controls_visited | length == 0 and sr.unmatched_punch_codes | length > 0 %}
+          <tr {% if wrong_course %}style="background:#fff3cd;"{% endif %}>
+            <td>
+              <strong>{{ e.course_name }}</strong>
+              {% if wrong_course %}
+              <span style="color:#856404;font-size:.75rem;display:block;">
+                ⚠ {{ sr.unmatched_punch_codes | length }} punches, 0 controls matched — possible wrong chip
+              </span>
+              {% endif %}
+            </td>
+            <td>
+              <form method="post" action="/racers/{{ r.id }}/entries/{{ e.id }}/chip"
+                    style="display:flex;gap:.3rem;align-items:center;">
+                <input type="number" name="si_chip" value="{{ e.si_chip or '' }}"
+                       placeholder="chip #" style="width:90px;font-size:.85rem;">
+                <button type="submit" class="btn btn-secondary btn-sm">Set</button>
+              </form>
+            </td>
+            <td style="font-size:.82rem;color:var(--text-muted);">
+              {{ e.start_time[:16] | replace("T"," ") if e.start_time else "—" }}
+            </td>
+            <td style="font-size:.82rem;color:var(--text-muted);">
+              {{ e.finish_time[:16] | replace("T"," ") if e.finish_time else "—" }}
+            </td>
+            <td>
+              <span class="badge" style="background:{{ STATUS_COLORS[e.status] }};color:#fff;font-size:.75rem;">
+                {{ STATUS_LABELS.get(e.status, e.status) }}
+              </span>
+            </td>
+            <td>
+              {% if sr %}
+              <strong>{{ sr.total_points }}</strong> pts
+              {% if sr.unmatched_punch_codes and sr.controls_visited %}
+              <span style="color:var(--warning);font-size:.7rem;" title="{{ sr.unmatched_punch_codes|length }} unmatched">⚠</span>
+              {% endif %}
+              {% else %}—{% endif %}
+            </td>
+            {# Move chip read — only shown when this entry has a finish time #}
+            <td style="width:1px;white-space:nowrap;">
+              {% if e.finish_time %}
+              {% set other_entries = selected_entries | rejectattr('id', 'equalto', e.id) | list %}
+              {% if other_entries %}
+              <details style="position:relative;">
+                <summary class="btn btn-secondary btn-sm"
+                         style="cursor:pointer;list-style:none;white-space:nowrap;
+                                {% if wrong_course %}background:#ffc107;border-color:#ffc107;color:#212529;{% endif %}">
+                  Move →
+                </summary>
+                <div style="position:absolute;right:0;top:2rem;background:white;
+                            border:1px solid var(--border);border-radius:6px;padding:.75rem;
+                            z-index:20;min-width:260px;box-shadow:0 4px 12px rgba(0,0,0,.12);">
+                  <p style="font-size:.78rem;font-weight:600;margin:0 0 .4rem;">Move chip read from <em>{{ e.course_name }}</em> to:</p>
+                  <form method="post" action="/racers/{{ r.id }}/entries/{{ e.id }}/move-chip-read">
+                    <div style="display:flex;gap:.4rem;align-items:center;flex-wrap:wrap;">
+                      <select name="to_entry_id" style="font-size:.82rem;flex:1;">
+                        {% for oe in other_entries %}
+                        <option value="{{ oe.id }}">{{ oe.course_name }}</option>
+                        {% endfor %}
+                      </select>
+                      <button type="submit" class="btn btn-primary btn-sm"
+                              onclick="return confirm('Move all punch data from {{ e.course_name }} to the selected course? This cannot be undone.')">
+                        Move
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </details>
+              {% endif %}
+              {% endif %}
+            </td>
+            <td style="width:1px;">
+              <form method="post" action="/racers/{{ r.id }}/entries/{{ e.id }}/unenroll"
+                    onsubmit="return confirm('Remove from {{ e.course_name }}?')">
+                <button type="submit" class="btn btn-danger btn-sm">Remove</button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p style="color:var(--text-muted);margin-bottom:.75rem;font-size:.88rem;">Not enrolled in any courses yet.</p>
+    {% endif %}
+
+    {% if courses %}
+    <form method="post" action="/racers/{{ r.id }}/enroll" style="display:flex;gap:.5rem;align-items:flex-end;flex-wrap:wrap;">
+      <div class="form-group">
+        <label>Enroll in Course</label>
+        <select name="course_id">
+          {% for c in courses %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="form-group">
+        <label>SI Chip #</label>
+        <input type="number" name="si_chip" placeholder="optional" style="width:110px;">
+      </div>
+      <div style="align-self:flex-end;">
+        <button type="submit" class="btn btn-success btn-sm">Enroll</button>
+      </div>
+    </form>
+    {% endif %}
+  </div>
+
+  {% else %}
+  <div class="card" style="padding:2rem;text-align:center;color:var(--text-muted);">
+    <p>Select a team from the list to view and edit their details.</p>
+  </div>
+  {% endif %}
+  </div>
+
+</div>
+
+<!-- Bulk action bar — slides up from the bottom when teams are selected -->
+<div id="bulk-bar" style="display:none;position:fixed;bottom:0;left:0;right:0;
+     background:var(--accent,#1a56db);color:#fff;
+     padding:.65rem 1.25rem;z-index:200;
+     box-shadow:0 -3px 14px rgba(0,0,0,.25);">
+  <form id="bulk-form" method="post" action="/racers/bulk-edit"
+        style="display:flex;gap:1rem;align-items:center;flex-wrap:wrap;">
+    <div id="bulk-racer-inputs"></div>
+    <span style="font-weight:700;font-size:.9rem;white-space:nowrap;">
+      <span id="bulk-count">0</span> selected
+    </span>
+
+    <div style="display:flex;gap:.4rem;align-items:center;">
+      <label style="font-size:.82rem;white-space:nowrap;">Set status:</label>
+      <select name="status" style="font-size:.82rem;">
+        <option value="">— keep current —</option>
+        {% for s in ALL_STATUSES %}
+        <option value="{{ s }}">{{ STATUS_LABELS[s] }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div style="display:flex;gap:.4rem;align-items:center;">
+      <label style="font-size:.82rem;white-space:nowrap;">Set class:</label>
+      <select name="class_id" style="font-size:.82rem;">
+        <option value="">— keep current —</option>
+        {% for cls in classes %}
+        <option value="{{ cls.id }}">{{ cls.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    {% if courses %}
+    <div style="display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;">
+      <span style="font-size:.82rem;white-space:nowrap;">Add to courses:</span>
+      {% for c in courses %}
+      <label style="display:flex;align-items:center;gap:.3rem;font-size:.82rem;cursor:pointer;white-space:nowrap;">
+        <input type="checkbox" name="course_ids" value="{{ c.id }}">
+        {{ c.name }}
+      </label>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <div style="display:flex;gap:.4rem;">
+      <button type="submit" class="btn btn-primary btn-sm"
+              style="background:#fff;color:var(--accent,#1a56db);border-color:#fff;">Apply</button>
+      <button type="button" class="btn btn-sm"
+              style="background:rgba(255,255,255,.18);color:#fff;border-color:rgba(255,255,255,.35);"
+              onclick="selectAll(false)">Cancel</button>
+    </div>
+  </form>
+</div>
+
+<script>
+function filterRacers(q) {
+  q = q.toLowerCase();
+  document.querySelectorAll('#racer-list .racer-wrap').forEach(function(el) {
+    el.style.display = el.dataset.search.includes(q) ? '' : 'none';
+  });
+}
+
+function selectAll(checked) {
+  document.querySelectorAll('.racer-select').forEach(function(cb) {
+    cb.checked = checked;
+  });
+  updateBulkBar();
+}
+
+function updateBulkBar() {
+  var checked = Array.from(document.querySelectorAll('.racer-select:checked'));
+  var bar = document.getElementById('bulk-bar');
+  bar.style.display = checked.length > 0 ? 'block' : 'none';
+  document.getElementById('bulk-count').textContent = checked.length;
+  var container = document.getElementById('bulk-racer-inputs');
+  container.innerHTML = '';
+  checked.forEach(function(cb) {
+    var inp = document.createElement('input');
+    inp.type = 'hidden'; inp.name = 'racer_ids'; inp.value = cb.dataset.id;
+    container.appendChild(inp);
+  });
+}
+
+document.querySelectorAll('.racer-select').forEach(function(cb) {
+  cb.addEventListener('change', updateBulkBar);
+});
+</script>
+
+{% endblock %}

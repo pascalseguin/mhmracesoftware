@@ -1,0 +1,16 @@
+{
+  "si_port": "",
+  "printer_name": "EPSON TM-T88V Receipt5",
+  "server_url": "",
+  "api_key": "",
+  "sync_interval_seconds": 30,
+  "host": "127.0.0.1",
+  "port": 8080,
+  "selected_course_id": 7,
+  "race_name": "Medicine Hat Massacre Race",
+  "race_year": "2026",
+  "si_cn_offset": 256,
+  "print_on_read": true,
+  "race_roster_teams_url": "https://raceroster.com/events/2026/108911/2026-seasar-mhm/teams",
+  "race_roster_participants_url": "https://raceroster.com/events/2026/108911/2026-seasar-mhm/participants"
+}

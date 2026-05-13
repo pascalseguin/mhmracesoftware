@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>{{ racer.name }} — {{ race_name }}</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+  font-size: 13px;
+  color: #1a1a1a;
+  background: #f0f0f0;
+}
+.page {
+  max-width: 900px;
+  margin: 24px auto;
+  background: #fff;
+  padding: 36px 44px 48px;
+  box-shadow: 0 2px 12px rgba(0,0,0,.12);
+}
+.screen-controls {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-bottom: 24px;
+}
+.btn {
+  padding: 7px 16px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background: #fff;
+  cursor: pointer;
+  font-size: .85em;
+  text-decoration: none;
+  color: #333;
+  font-family: inherit;
+}
+.btn-primary { background: #1a5fb4; color: #fff; border-color: #1a5fb4; }
+
+.racer-header {
+  border-bottom: 3px solid #1a1a1a;
+  padding-bottom: 16px;
+  margin-bottom: 28px;
+}
+.racer-header h1 {
+  font-size: 2em;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+.racer-header .meta {
+  font-size: .9em;
+  color: #555;
+  margin-top: 4px;
+}
+
+.course-section {
+  margin-bottom: 32px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  overflow: hidden;
+}
+.course-section h2 {
+  font-size: 1.05em;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  padding: 10px 14px;
+  background: #f5f5f5;
+  border-bottom: 1px solid #ddd;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.score-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 0;
+  border-bottom: 1px solid #ddd;
+}
+.score-cell {
+  padding: 10px 14px;
+  border-right: 1px solid #eee;
+}
+.score-cell:last-child { border-right: none; }
+.score-cell .label { font-size: .72em; text-transform: uppercase; color: #777; font-weight: 600; }
+.score-cell .value { font-size: 1.15em; font-weight: 700; margin-top: 2px; }
+
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid #eee; font-size: .88em; }
+thead th { background: #fafafa; font-weight: 600; font-size: .78em; text-transform: uppercase; color: #555; }
+tr:last-child td { border-bottom: none; }
+.matched { color: #1a7a3a; }
+.unmatched { color: #b00; }
+.status-ok { color: #1a7a3a; }
+.status-dsq { color: #b00; }
+.status-dnf { color: #d77; }
+.status-active { color: #555; }
+
+.footer { margin-top: 32px; font-size: .78em; color: #999; text-align: right; }
+
+@media print {
+  * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+  body { background: #fff; }
+  .page { box-shadow: none; margin: 0; padding: 24px 28px; }
+  .screen-controls { display: none; }
+}
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="screen-controls">
+    <button class="btn btn-primary" onclick="window.print()">Save as PDF</button>
+    <a href="/racers?racer_id={{ racer.id if racer.id else '' }}" class="btn">&#8592; Back</a>
+  </div>
+
+  <div class="racer-header">
+    <h1>
+      {% if racer.bib_number %}#{{ racer.bib_number }} — {% endif %}{{ racer.name }}
+    </h1>
+    <div class="meta">
+      {{ race_name }}
+      {% if results and results[0].racer.class_name %} &middot; {{ results[0].racer.class_name }}{% endif %}
+      &middot; Generated {{ generated }}
+    </div>
+  </div>
+
+  {% if results %}
+  {% for r in results %}
+  <div class="course-section">
+    <h2>
+      <span>{{ r.course.name }}</span>
+      <span class="status-{{ r.entry.status.value | lower }}" style="font-size:.85em;font-weight:600;">
+        {{ r.entry.status.value }}
+      </span>
+    </h2>
+
+    <!-- Score summary -->
+    <div class="score-grid">
+      <div class="score-cell">
+        <div class="label">Start</div>
+        <div class="value" style="font-size:.92em;">
+          {{ r.entry.start_time.strftime("%H:%M:%S") if r.entry.start_time else "—" }}
+        </div>
+      </div>
+      <div class="score-cell">
+        <div class="label">Finish</div>
+        <div class="value" style="font-size:.92em;">
+          {{ r.entry.finish_time.strftime("%H:%M:%S") if r.entry.finish_time else "—" }}
+        </div>
+      </div>
+      <div class="score-cell">
+        <div class="label">Elapsed</div>
+        <div class="value" style="font-size:.92em;">
+          {% if r.elapsed_seconds %}
+          {{ "%d:%02d:%02d" | format(r.elapsed_seconds // 3600, (r.elapsed_seconds % 3600) // 60, r.elapsed_seconds % 60) }}
+          {% else %}—{% endif %}
+        </div>
+      </div>
+      <div class="score-cell">
+        <div class="label">Controls</div>
+        <div class="value">{{ r.controls_visited | length }}</div>
+      </div>
+      <div class="score-cell">
+        <div class="label">Raw Points</div>
+        <div class="value">{{ r.raw_points }}</div>
+      </div>
+      {% if r.overtime_penalty %}
+      <div class="score-cell">
+        <div class="label">Overtime ({{ r.overtime_minutes }}m)</div>
+        <div class="value" style="color:#b00;">-{{ r.overtime_penalty }}</div>
+      </div>
+      {% endif %}
+      {% if r.total_adjustments != 0 %}
+      <div class="score-cell">
+        <div class="label">Adjustments</div>
+        <div class="value" style="color:{% if r.total_adjustments > 0 %}#1a7a3a{% else %}#b00{% endif %};">
+          {{ "%+d" | format(r.total_adjustments) }}
+        </div>
+      </div>
+      {% endif %}
+      <div class="score-cell" style="background:#f9f9f9;">
+        <div class="label">Total</div>
+        <div class="value" style="font-size:1.35em;">{{ r.total_points }}</div>
+      </div>
+    </div>
+
+    <!-- Warnings -->
+    {% if r.controls_missed_mandatory %}
+    <div style="padding:8px 14px;background:#fff3cd;border-bottom:1px solid #ddd;font-size:.83em;color:#856404;">
+      Missed mandatory control(s):
+      {% for cp in r.controls_missed_mandatory %}{{ cp.name or cp.si_code }}{% if not loop.last %}, {% endif %}{% endfor %}
+      — raw score zeroed
+    </div>
+    {% endif %}
+    {% if r.order_violation %}
+    <div style="padding:8px 14px;background:#fff3cd;border-bottom:1px solid #ddd;font-size:.83em;color:#856404;">
+      Mandatory control order violation recorded
+    </div>
+    {% endif %}
+    {% if r.unmatched_punch_codes %}
+    <div style="padding:8px 14px;background:#f8d7da;border-bottom:1px solid #ddd;font-size:.83em;color:#721c24;">
+      Unmatched punch codes (no matching control configured): {{ r.unmatched_punch_codes | join(", ") }}
+    </div>
+    {% endif %}
+
+    <!-- Punch list -->
+    {% set visited_codes = r.controls_visited | map(attribute='si_code') | list %}
+    {% if r.entry.punches %}
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Time</th>
+          <th>SI Code</th>
+          <th>Control Name</th>
+          <th>Points</th>
+          <th>Matched</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for punch in r.entry.punches | sort(attribute='punch_time') %}
+        {% set matched_cp = r.controls_visited | selectattr('si_code', 'equalto', punch.si_code) | first %}
+        <tr>
+          <td style="color:#999;">{{ loop.index }}</td>
+          <td>{{ punch.punch_time.strftime("%H:%M:%S") }}</td>
+          <td><code>{{ punch.si_code }}</code>{% if punch.is_manual %} <span style="font-size:.7em;color:#999;">(manual)</span>{% endif %}</td>
+          <td>{{ matched_cp.name if matched_cp else "—" }}</td>
+          <td>{% if matched_cp %}{{ matched_cp.points }}{% else %}—{% endif %}</td>
+          <td class="{% if matched_cp %}matched{% else %}unmatched{% endif %}">
+            {% if matched_cp %}&#10003;{% else %}&times;{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p style="padding:10px 14px;color:#999;font-size:.85em;">No punch records.</p>
+    {% endif %}
+
+    <!-- Adjustments -->
+    {% if r.entry.adjustments %}
+    <table style="margin-top:0;border-top:2px solid #ddd;">
+      <thead>
+        <tr><th colspan="2">Adjustments</th><th>Points</th><th>Category</th></tr>
+      </thead>
+      <tbody>
+        {% for adj in r.entry.adjustments %}
+        <tr>
+          <td colspan="2">{{ adj.description }}</td>
+          <td style="color:{% if adj.points > 0 %}#1a7a3a{% else %}#b00{% endif %};">
+            {{ "%+d" | format(adj.points) }}
+          </td>
+          <td style="color:#777;font-size:.82em;">{{ adj.category }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+
+  </div>
+  {% endfor %}
+
+  {% else %}
+  <p style="color:#999;padding:1rem 0;">No course entries for this team.</p>
+  {% endif %}
+
+  <div class="footer">{{ race_name }} &middot; Generated {{ generated }}</div>
+
+</div>
+</body>
+</html>

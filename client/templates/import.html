@@ -1,0 +1,190 @@
+{% extends "base.html" %}
+{% block title %}Bulk Import{% endblock %}
+
+{% block page_header %}
+<div class="page-header">
+  <h1>Bulk Import</h1>
+  <p>Paste CSV data to import teams or control points in bulk</p>
+</div>
+{% endblock %}
+
+{% block content %}
+
+<!-- Bulk Import Teams -->
+<div class="card" style="border-left:3px solid var(--accent);">
+  <h2>Import Teams</h2>
+  <p style="color:var(--text-muted);font-size:.88rem;margin-bottom:.75rem;">
+    One team per line. You'll get a <strong>preview</strong> before anything is saved —
+    the app will flag duplicate names and suggest merges or class-name corrections.
+  </p>
+  <table style="font-size:.82rem;margin-bottom:1rem;width:auto;">
+    <thead><tr><th>Columns</th><th>Format</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td><code>team_name</code></td></tr>
+      <tr><td>2</td><td><code>bib_number, team_name</code></td></tr>
+      <tr><td>3</td><td><code>bib_number, team_name, class</code></td></tr>
+    </tbody>
+  </table>
+
+  <div style="background:#f9f9f9;border:1px solid var(--border);border-radius:4px;
+              padding:.6rem .9rem;margin-bottom:1rem;font-size:.82rem;font-family:monospace;
+              color:var(--text-muted);">
+    101, Mountain Goats, Mixed<br>
+    102, Trail Blazers, Men<br>
+    103, Desert Foxes, Women<br>
+    Unnamed Squad
+  </div>
+
+  <form method="post" action="/import/teams/preview">
+    <div class="form-group" style="margin-bottom:.75rem;">
+      <label>Paste CSV data</label>
+      <textarea name="data" rows="12"
+                style="width:100%;font-family:monospace;font-size:.85rem;resize:vertical;"
+                placeholder="101, Mountain Goats, Mixed&#10;102, Trail Blazers, Men&#10;103, Desert Foxes, Women"></textarea>
+    </div>
+    <button type="submit" class="btn btn-primary">Preview Import</button>
+  </form>
+</div>
+
+<!-- Import from MeOS Backup -->
+<div class="card" style="border-left:3px solid var(--accent);">
+  <h2>Import from MeOS Backup</h2>
+  <p style="color:var(--text-muted);font-size:.88rem;margin-bottom:.75rem;">
+    Upload a <code>.meosxml</code> backup file exported from MeOS. You'll get a preview
+    to choose exactly which courses and teams to import before anything is saved.
+    Courses, controls, teams, and chip assignments are all imported in one step.
+  </p>
+  <form method="post" action="/import/meos/preview" enctype="multipart/form-data">
+    <div style="display:flex;gap:.75rem;align-items:center;flex-wrap:wrap;">
+      <input type="file" name="file" accept=".meosxml,.xml" required
+             style="font-size:.88rem;padding:.3rem;">
+      <button type="submit" class="btn btn-primary">Preview Import</button>
+    </div>
+  </form>
+</div>
+
+<!-- Import Controls -->
+<div class="card">
+  <h2>Import Control Points</h2>
+  <p style="color:var(--text-muted);font-size:.88rem;margin-bottom:.5rem;">
+    One control per line. <strong>SI code is the only required field.</strong>
+    The same SI code can have different points per course — import once per course.
+    Re-importing updates existing controls.
+  </p>
+  <table style="font-size:.82rem;margin-bottom:1rem;width:auto;">
+    <thead><tr><th>Columns</th><th>Format</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td><code>si_code</code> — points default to 0</td></tr>
+      <tr><td>2</td><td><code>si_code, points</code></td></tr>
+      <tr><td>3</td><td><code>si_code, points, name</code></td></tr>
+      <tr><td>4</td><td><code>si_code, points, name, is_mandatory</code> (0 or 1)</td></tr>
+      <tr><td>5</td><td><code>si_code, points, name, is_mandatory, mandatory_order</code></td></tr>
+    </tbody>
+  </table>
+
+  <div style="background:#f9f9f9;border:1px solid var(--border);border-radius:4px;
+              padding:.6rem .9rem;margin-bottom:1rem;font-size:.82rem;font-family:monospace;
+              color:var(--text-muted);">
+    31, 10, Checkpoint A, 0<br>
+    32, 15, River Cross, 1, 1<br>
+    33, 20, Summit Ridge, 1, 2<br>
+    45, 50
+  </div>
+
+  {% if courses %}
+  <form method="post" action="/import/controls">
+    <div class="form-row" style="margin-bottom:.75rem;align-items:flex-start;gap:1rem;">
+      <div class="form-group" style="min-width:200px;">
+        <label>Target Course *</label>
+        <select name="course_id" required style="width:100%;">
+          {% for c in courses %}
+          <option value="{{ c.id }}">{{ c.name }}</option>
+          {% endfor %}
+        </select>
+        <small style="color:var(--text-muted);">Controls are per-course — import once per course</small>
+      </div>
+      <div class="form-group" style="flex:1;">
+        <label>Paste CSV data</label>
+        <textarea name="data" rows="10"
+                  style="width:100%;font-family:monospace;font-size:.85rem;resize:vertical;"
+                  placeholder="31, 10&#10;32, 15&#10;33, 20&#10;45, 50"></textarea>
+      </div>
+    </div>
+    <button type="submit" class="btn btn-primary">Import Controls</button>
+  </form>
+  {% else %}
+  <div style="color:var(--text-muted);">
+    No courses yet. <a href="/courses">Add a course first</a>, then come back to import controls.
+  </div>
+  {% endif %}
+</div>
+
+<!-- Import Chip Library -->
+<div class="card" style="border-left:3px solid var(--accent);">
+  <h2>Import Chip Library</h2>
+  <p style="color:var(--text-muted);font-size:.88rem;margin-bottom:.75rem;">
+    Paste one chip per line. Existing SI codes are updated; new ones are added.
+  </p>
+  <table style="font-size:.82rem;margin-bottom:1rem;width:auto;">
+    <thead><tr><th>Format</th></tr></thead>
+    <tbody>
+      <tr><td><code>name, si_code</code></td></tr>
+      <tr><td><code>si_code, name</code></td></tr>
+    </tbody>
+  </table>
+  <div style="background:#f9f9f9;border:1px solid var(--border);border-radius:4px;
+              padding:.6rem .9rem;margin-bottom:1rem;font-size:.82rem;font-family:monospace;
+              color:var(--text-muted);">
+    Red 01, 500001<br>
+    Red 02, 500002<br>
+    Blue 01, 500101
+  </div>
+  <form method="post" action="/chips/import">
+    <div class="form-group" style="margin-bottom:.75rem;">
+      <label>Paste CSV data</label>
+      <textarea name="csv_text" rows="8"
+                style="width:100%;font-family:monospace;font-size:.85rem;resize:vertical;"
+                placeholder="Red 01, 500001&#10;Red 02, 500002&#10;Blue 01, 500101"></textarea>
+    </div>
+    <button type="submit" class="btn btn-primary">Import Chip Library</button>
+  </form>
+</div>
+
+<!-- Import Chip Assignments from Spreadsheet -->
+<div class="card" style="border-left:3px solid var(--accent);">
+  <h2>Import Chip Assignments from Spreadsheet</h2>
+  <p style="color:var(--text-muted);font-size:.88rem;margin-bottom:.75rem;">
+    Paste a CSV or tab-separated table (copied from Excel / Google Sheets) with per-activity
+    chip columns. Activity type is detected from the column header keywords
+    <strong>Hike</strong>, <strong>Paddle</strong>, and <strong>Bike</strong>.
+    Team names are fuzzy-matched to existing racers. You'll see a
+    <strong>preview</strong> before anything is saved. Missing chips are added
+    to the library automatically.
+  </p>
+  <p style="font-size:.81rem;color:var(--text-muted);margin-bottom:1rem;">
+    Expected headers (order flexible, Class column is ignored):<br>
+    <code>Team Name · Class · Hike Chip Name · Hike Chip SI Code · Paddle Chip Name · Paddle Chip SI Code · Bike Chip Name · Bike Chip SI Code</code>
+  </p>
+  <form method="post" action="/chips/import-assignments/preview">
+    <div class="form-group" style="margin-bottom:.75rem;">
+      <label>Paste CSV / spreadsheet data (include the header row)</label>
+      <textarea name="csv_text" rows="10"
+                style="width:100%;font-family:monospace;font-size:.85rem;resize:vertical;"
+                placeholder="Team Name,Class,Hike Chip Name,Hike Chip SI Code,Paddle Chip Name,Paddle Chip SI Code,Bike Chip Name,Bike Chip SI Code&#10;BILLY GOATS,Mens,1,2031141,56,2012808,121,2031157"></textarea>
+    </div>
+    <button type="submit" class="btn btn-primary">Preview Import</button>
+  </form>
+</div>
+
+<!-- Notes -->
+<div class="card" style="border-left:3px solid var(--accent);">
+  <h2>Tips</h2>
+  <ul style="font-size:.88rem;line-height:1.9;color:var(--text-muted);padding-left:1.25rem;">
+    <li>You can add control names after import from the <a href="/courses">Courses</a> page.</li>
+    <li>A control with the same SI code can appear in multiple courses with different point values — just import once per course using the course selector above.</li>
+    <li>Existing controls (same SI code in same course) will have their points updated, not duplicated.</li>
+    <li>Teams are not automatically enrolled in courses — do that from the <a href="/racers">Racers</a> page after import.</li>
+  </ul>
+</div>
+
+{% endblock %}

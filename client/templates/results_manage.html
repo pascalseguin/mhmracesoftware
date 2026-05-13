@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+{% block title %}Manage Statuses{% endblock %}
+
+{% block page_header %}
+<div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:.75rem;">
+  <div>
+    <h1>Manage Team Statuses</h1>
+    <p>Status changes apply to all of a team's course entries at once</p>
+  </div>
+  <a href="/results" class="btn btn-secondary">← Leaderboard</a>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{% if racer_rows %}
+
+{# Bulk action bar — fixed at bottom when rows are selected #}
+<div id="bulk-bar" style="display:none;position:fixed;bottom:0;left:0;right:0;
+     background:var(--accent,#1a56db);color:#fff;padding:.65rem 1.25rem;z-index:200;
+     box-shadow:0 -3px 14px rgba(0,0,0,.25);">
+  <form method="post" action="/results/manage/bulk"
+        style="display:flex;gap:1rem;align-items:center;flex-wrap:wrap;">
+    <div id="bulk-inputs"></div>
+    <span style="font-weight:700;font-size:.9rem;white-space:nowrap;">
+      <span id="bulk-count">0</span> selected
+    </span>
+    <div style="display:flex;gap:.4rem;align-items:center;">
+      <label style="font-size:.85rem;white-space:nowrap;">Set status:</label>
+      <select name="status" style="font-size:.85rem;">
+        {% for s in ALL_STATUSES %}
+        <option value="{{ s }}">{{ STATUS_LABELS[s] }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div style="display:flex;gap:.4rem;">
+      <button type="submit" class="btn btn-primary btn-sm"
+              style="background:#fff;color:var(--accent,#1a56db);border-color:#fff;">Apply</button>
+      <button type="button" class="btn btn-sm"
+              style="background:rgba(255,255,255,.18);color:#fff;border-color:rgba(255,255,255,.35);"
+              onclick="selectAll(false)">Cancel</button>
+    </div>
+  </form>
+</div>
+
+<div class="card" style="padding:0;">
+  <div style="padding:.6rem .75rem;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border);">
+    <span style="font-size:.8rem;color:var(--text-muted);">
+      <a href="#" onclick="selectAll(true);return false;">Select all</a> ·
+      <a href="#" onclick="selectAll(false);return false;">None</a>
+    </span>
+    <span style="font-size:.8rem;color:var(--text-muted);">{{ racer_rows | length }} teams</span>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th style="width:32px;"></th>
+          <th style="width:60px;">Bib</th>
+          <th>Team</th>
+          <th>Status</th>
+          {% for c in courses | sort(attribute='name') %}
+          <th style="font-size:.75rem;color:var(--text-muted);">{{ c.name }}</th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in racer_rows %}
+        {% set sv = row.overall_status %}
+        <tr>
+          <td style="text-align:center;">
+            <input type="checkbox" class="row-select" data-id="{{ row.racer.id }}"
+                   style="width:15px;height:15px;cursor:pointer;">
+          </td>
+          <td style="font-size:.85rem;color:var(--text-muted);">{{ row.racer.bib_number or "—" }}</td>
+          <td>
+            <strong>{{ row.racer.name }}</strong>
+            {% if row.racer.class_name %}
+            <span style="font-size:.75rem;color:var(--text-muted);margin-left:.3rem;">{{ row.racer.class_name }}</span>
+            {% endif %}
+          </td>
+          <td>
+            <form method="post" action="/results/manage">
+              <input type="hidden" name="racer_id" value="{{ row.racer.id }}">
+              <select name="status" onchange="this.form.submit()"
+                      style="font-size:.85rem;padding:.2rem .35rem;border-radius:4px;font-weight:600;cursor:pointer;
+                             border:2px solid {{ STATUS_COLORS[sv] }};color:{{ STATUS_COLORS[sv] }};background:white;">
+                {% for s in ALL_STATUSES %}
+                <option value="{{ s }}" {% if sv == s %}selected{% endif %}>{{ STATUS_LABELS[s] }}</option>
+                {% endfor %}
+              </select>
+            </form>
+          </td>
+          {# Per-course score + finish time for reference #}
+          {% for c in courses | sort(attribute='name') %}
+          {% if c.id in row.course_scores %}
+          {% set sr = row.course_scores[c.id] %}
+          <td style="font-size:.78rem;color:var(--text-muted);">
+            {{ sr.total_points }}pts
+            {% if sr.entry.finish_time %}
+            <br><span style="font-size:.72rem;">{{ sr.entry.finish_time.strftime('%H:%M') }}</span>
+            {% endif %}
+          </td>
+          {% else %}
+          <td style="color:var(--text-muted);">—</td>
+          {% endif %}
+          {% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+function selectAll(checked) {
+  document.querySelectorAll('.row-select').forEach(cb => cb.checked = checked);
+  updateBulkBar();
+}
+function updateBulkBar() {
+  var checked = Array.from(document.querySelectorAll('.row-select:checked'));
+  document.getElementById('bulk-bar').style.display = checked.length ? 'block' : 'none';
+  document.getElementById('bulk-count').textContent = checked.length;
+  var container = document.getElementById('bulk-inputs');
+  container.innerHTML = '';
+  checked.forEach(cb => {
+    var inp = document.createElement('input');
+    inp.type = 'hidden'; inp.name = 'racer_ids'; inp.value = cb.dataset.id;
+    container.appendChild(inp);
+  });
+}
+document.querySelectorAll('.row-select').forEach(cb => cb.addEventListener('change', updateBulkBar));
+</script>
+
+{% else %}
+<div class="card" style="text-align:center;padding:2rem;color:var(--text-muted);">
+  <p>No entries yet. <a href="/racers">Add teams</a> and enroll them in courses first.</p>
+</div>
+{% endif %}
+
+{% endblock %}

@@ -1,0 +1,176 @@
+{% extends "base.html" %}
+{% block title %}Class Results{% endblock %}
+
+{% block page_header %}
+<div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:.75rem;">
+  <div>
+    <h1>Leaderboard</h1>
+    <p>Teams ranked within their class — course scores + bonuses + penalties + manual adjustments</p>
+  </div>
+  <div style="display:flex;gap:.5rem;">
+    <a href="/finalize" class="btn btn-primary">&#10003; Finalize &amp; Export</a>
+    <a href="/export/results" class="btn btn-secondary" target="_blank">&#8681; Quick Export</a>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+
+<!-- Column legend -->
+<div class="card" style="padding:.75rem 1.25rem;">
+  <div style="display:flex;gap:1.5rem;align-items:center;flex-wrap:wrap;">
+    <span style="font-size:.8rem;text-transform:uppercase;color:var(--text-muted);font-weight:600;">Columns:</span>
+    {% for c in courses %}
+    <span>
+      <span class="badge badge-active">{{ c.name }}</span>
+      <span style="font-size:.78rem;color:var(--text-muted);margin-left:.25rem;">controls − overtime</span>
+    </span>
+    {% endfor %}
+    <span>
+      <span class="badge" style="background:var(--success);color:#fff;">Bonus</span>
+      <span style="font-size:.78rem;color:var(--text-muted);margin-left:.25rem;">named bonus types</span>
+    </span>
+    <span>
+      <span class="badge" style="background:var(--danger);color:#fff;">Penalty</span>
+      <span style="font-size:.78rem;color:var(--text-muted);margin-left:.25rem;">named penalty types</span>
+    </span>
+    <span>
+      <span class="badge badge-active">Manual</span>
+      <span style="font-size:.78rem;color:var(--text-muted);margin-left:.25rem;">free-form adjustments</span>
+    </span>
+  </div>
+</div>
+
+{% if class_data %}
+{% for cd in class_data %}
+<div class="card">
+  <h2>{{ cd.cls.name }}</h2>
+
+  {% if cd.rows %}
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Bib</th>
+          <th>Team</th>
+          {# One column per course — shows pre-adjustment score for that course only #}
+          {% for c in courses %}
+          <th title="{{ c.name }} — controls minus overtime, before adjustments">{{ c.name }}</th>
+          {% endfor %}
+          <th title="Sum of all bonus-type adjustments" style="color:var(--success);">Bonuses</th>
+          <th title="Sum of all penalty-type adjustments" style="color:var(--danger);">Penalties</th>
+          <th title="Sum of free-form manual adjustments">Manual</th>
+          <th>Total</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in cd.rows %}
+        {% set is_unranked = row.rank is none %}
+        <tr class="{% if row.rank == 1 %}rank-1{% elif row.rank == 2 %}rank-2{% elif row.rank == 3 %}rank-3{% endif %}"
+            style="{% if is_unranked %}opacity:.75;{% endif %}">
+          <td>
+            {% if row.rank %}
+              <strong>{{ row.rank }}</strong>
+            {% else %}
+              <span style="font-size:.78rem;font-weight:700;color:{{ STATUS_COLORS[row.overall_status] }};">
+                {{ STATUS_LABELS[row.overall_status] }}
+              </span>
+            {% endif %}
+          </td>
+          <td>{{ row.racer.bib_number or "—" }}</td>
+          <td>{{ row.racer.name }}</td>
+
+          {# Per-course score cell — pre-adjustment (controls - overtime only) #}
+          {% for c in courses %}
+          {% if c.id in row.course_scores %}
+          {% set sr = row.course_scores[c.id] %}
+          {% set pre = row.pre_adj.get(c.id, 0) %}
+          <td>
+            <span title="Controls: {{ sr.raw_points }}pts, Overtime: -{{ sr.overtime_penalty }}pts">
+              {{ pre }}
+            </span>
+            {% if sr.overtime_minutes %}
+            <span style="color:var(--danger);font-size:.72rem;" title="{{ sr.overtime_minutes }}min over">
+              (−{{ sr.overtime_penalty }} OT)
+            </span>
+            {% endif %}
+          </td>
+          {% else %}
+          <td style="color:var(--text-muted);">—</td>
+          {% endif %}
+          {% endfor %}
+
+          {# Bonuses column — green, only show if non-zero #}
+          <td style="color:{% if row.bonus_pts > 0 %}var(--success){% else %}var(--text-muted){% endif %};">
+            {% if row.bonus_pts %}+{{ row.bonus_pts }}{% else %}—{% endif %}
+          </td>
+
+          {# Penalties column — red, always negative or dash #}
+          <td style="color:{% if row.penalty_pts < 0 %}var(--danger){% else %}var(--text-muted){% endif %};">
+            {% if row.penalty_pts %}{{ row.penalty_pts }}{% else %}—{% endif %}
+          </td>
+
+          {# Manual adjustments column — signed, colour by sign #}
+          <td style="color:{% if row.manual_pts > 0 %}var(--success){% elif row.manual_pts < 0 %}var(--danger){% else %}var(--text-muted){% endif %};">
+            {% if row.manual_pts %}{{ "%+d" | format(row.manual_pts) }}{% else %}—{% endif %}
+          </td>
+
+          <td><strong>{{ row.total }}</strong></td>
+
+          {# Overall status badge #}
+          <td>
+            <span class="badge" style="background:{{ STATUS_COLORS[row.overall_status] }};color:#fff;font-size:.72rem;">
+              {{ STATUS_LABELS[row.overall_status] }}
+            </span>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+
+      {# Totals footer row for classes with multiple teams #}
+      {% if cd.rows | length > 1 %}
+      <tfoot>
+        <tr style="font-size:.8rem;color:var(--text-muted);border-top:2px solid var(--border);">
+          <td colspan="3">{{ cd.rows | length }} teams</td>
+          {% for c in courses %}
+          <td></td>
+          {% endfor %}
+          <td style="color:var(--success);">
+            {% set total_bonus = cd.rows | sum(attribute='bonus_pts') %}
+            {% if total_bonus %}+{{ total_bonus }}{% else %}—{% endif %}
+          </td>
+          <td style="color:var(--danger);">
+            {% set total_pen = cd.rows | sum(attribute='penalty_pts') %}
+            {% if total_pen %}{{ total_pen }}{% else %}—{% endif %}
+          </td>
+          <td>
+            {% set total_manual = cd.rows | sum(attribute='manual_pts') %}
+            {% if total_manual %}{{ "%+d" | format(total_manual) }}{% else %}—{% endif %}
+          </td>
+          <td></td>
+          <td></td>
+        </tr>
+      </tfoot>
+      {% endif %}
+
+    </table>
+  </div>
+  {% else %}
+  <p style="color:var(--text-muted);">No teams in this class yet.</p>
+  {% endif %}
+</div>
+{% endfor %}
+
+{% else %}
+<div class="card">
+  <p style="color:var(--text-muted);">
+    No results yet.
+    <a href="/classes">Set up classes</a>, assign teams in <a href="/racers">Racers</a>,
+    then results will appear here as chips are read.
+  </p>
+</div>
+{% endif %}
+
+{% endblock %}

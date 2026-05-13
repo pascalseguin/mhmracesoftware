@@ -1,0 +1,252 @@
+{% extends "base.html" %}
+{% block title %}Settings{% endblock %}
+
+{% block page_header %}
+<div class="page-header">
+  <h1>Settings</h1>
+  <p>Hardware, sync, and user management</p>
+</div>
+{% endblock %}
+
+{% block content %}
+
+<!-- Race Identity -->
+<div class="card">
+  <h2>Race Identity</h2>
+  <form method="post" action="/settings">
+    <div class="form-row" style="margin-bottom:1rem;">
+      <div class="form-group" style="flex:1;">
+        <label>Race Name</label>
+        <input type="text" name="race_name" value="{{ cfg.race_name }}" style="width:100%;"
+               placeholder="Medicine Hat Massacre">
+        <small style="color:var(--text-muted);">Shown in nav and on printed receipts</small>
+      </div>
+      <div class="form-group" style="width:100px;">
+        <label>Year</label>
+        <input type="text" name="race_year" value="{{ cfg.race_year }}" style="width:80px;"
+               placeholder="2026">
+      </div>
+      <!-- hidden fields so other settings aren't wiped by this form -->
+      <input type="hidden" name="printer_name" value="{{ cfg.printer_name }}">
+      <input type="hidden" name="server_url" value="{{ cfg.server_url }}">
+      <input type="hidden" name="api_key" value="{{ cfg.api_key }}">
+      <input type="hidden" name="sync_interval_seconds" value="{{ cfg.sync_interval_seconds }}">
+      <input type="hidden" name="si_cn_offset" value="{{ cfg.si_cn_offset if cfg.si_cn_offset is not none else 256 }}">
+      <div style="align-self:flex-end;">
+        <button type="submit" class="btn btn-primary">Save</button>
+      </div>
+    </div>
+  </form>
+</div>
+
+<!-- Hardware & Sync -->
+<div class="card">
+  <h2>Hardware &amp; Sync</h2>
+  <form method="post" action="/settings">
+    <!-- preserve race fields -->
+    <input type="hidden" name="race_name" value="{{ cfg.race_name }}">
+    <input type="hidden" name="race_year" value="{{ cfg.race_year }}">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;">
+
+      <div>
+        <div class="form-group" style="margin-bottom:.75rem;">
+          <label>SportIdent COM Port</label>
+          <select name="si_port">
+            <option value="">— None —</option>
+            {% for p in si_ports %}
+            <option value="{{ p }}" {% if cfg.si_port == p %}selected{% endif %}>{{ p }}</option>
+            {% endfor %}
+          </select>
+          <small style="color:var(--text-muted);">Restart app after changing port</small>
+        </div>
+
+        <div class="form-group" style="margin-bottom:.75rem;">
+          <label>Receipt Printer</label>
+          <select name="printer_name" style="width:100%;">
+            <option value="">— None —</option>
+            {% for p in printers %}
+            <option value="{{ p }}" {% if cfg.printer_name == p %}selected{% endif %}>{{ p }}</option>
+            {% endfor %}
+            {% if cfg.printer_name and cfg.printer_name not in printers %}
+            <option value="{{ cfg.printer_name }}" selected>{{ cfg.printer_name }} ⚠ not detected</option>
+            {% endif %}
+          </select>
+          {% if not printers %}
+          <small style="color:var(--text-muted);">
+            No printers found — install a printer in Windows, then
+            <a href="/settings">refresh</a>.
+          </small>
+          {% endif %}
+        </div>
+      </div>
+
+      <div>
+        <div class="form-group" style="margin-bottom:.75rem;">
+          <label>Server URL</label>
+          <input type="text" name="server_url" value="{{ cfg.server_url }}"
+                 placeholder="https://results.mhmassacre.ca" style="width:100%;">
+        </div>
+
+        <div class="form-group" style="margin-bottom:.75rem;">
+          <label>API Key</label>
+          <input type="text" name="api_key" value="{{ cfg.api_key }}"
+                 placeholder="secret key" style="width:100%;">
+        </div>
+
+        <div class="form-group" style="margin-bottom:.75rem;">
+          <label>Sync Interval (seconds)</label>
+          <input type="number" name="sync_interval_seconds" value="{{ cfg.sync_interval_seconds }}"
+                 min="10" style="width:100px;">
+        </div>
+
+        <div class="form-group" style="margin-bottom:.75rem;">
+          <label>SI Code Number Offset</label>
+          <input type="number" name="si_cn_offset" value="{{ cfg.si_cn_offset if cfg.si_cn_offset is not none else 256 }}"
+                 style="width:100px;">
+          <small style="color:var(--text-muted);">
+            Added to every punch code number before scoring.<br>
+            Set to <strong>256</strong> if your SI stations are numbered 256–511,
+            <strong>512</strong> for 512–767, <strong>0</strong> to disable.
+          </small>
+        </div>
+      </div>
+
+    </div>
+    <button type="submit" class="btn btn-primary">Save Settings</button>
+  </form>
+</div>
+
+<!-- User Management -->
+<div class="card">
+  <h2>Users</h2>
+
+  {% if users %}
+  <div class="table-wrap" style="margin-bottom:1rem;">
+    <table>
+      <thead><tr><th>Username</th><th></th></tr></thead>
+      <tbody>
+        {% for u in users %}
+        <tr>
+          <td>{{ u.username }}</td>
+          <td>
+            {% if u.username != "admin" %}
+            <form method="post" action="/settings/users/{{ u.id }}/delete"
+                  onsubmit="return confirm('Delete user {{ u.username }}?')"
+                  style="display:inline;">
+              <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+            </form>
+            {% else %}
+            <span style="font-size:.78rem;color:var(--text-muted);">protected</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;">
+
+    <!-- Add user -->
+    <div>
+      <p style="font-size:.78rem;font-weight:600;text-transform:uppercase;color:var(--text-muted);margin-bottom:.5rem;">Add User</p>
+      <form method="post" action="/settings/users/add">
+        <div class="form-group" style="margin-bottom:.5rem;">
+          <label>Username</label>
+          <input type="text" name="username" style="width:100%;">
+        </div>
+        <div class="form-group" style="margin-bottom:.75rem;">
+          <label>Password</label>
+          <input type="password" name="password" style="width:100%;">
+        </div>
+        <button type="submit" class="btn btn-secondary btn-sm">Add User</button>
+      </form>
+    </div>
+
+    <!-- Change password -->
+    <div>
+      <p style="font-size:.78rem;font-weight:600;text-transform:uppercase;color:var(--text-muted);margin-bottom:.5rem;">Change Password</p>
+      <form method="post" action="/settings/users/change-password">
+        <div class="form-group" style="margin-bottom:.5rem;">
+          <label>Username</label>
+          <select name="username" style="width:100%;">
+            {% for u in users %}
+            <option value="{{ u.username }}">{{ u.username }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group" style="margin-bottom:.75rem;">
+          <label>New Password</label>
+          <input type="password" name="new_password" style="width:100%;">
+        </div>
+        <button type="submit" class="btn btn-secondary btn-sm">Update Password</button>
+      </form>
+    </div>
+
+  </div>
+</div>
+
+<!-- Danger zone -->
+<div id="chip-assignments" class="card" style="border-color:var(--danger);">
+  <h2 style="color:var(--danger);border-bottom-color:var(--danger);">Danger Zone</h2>
+  <div style="display:flex;flex-direction:column;gap:1rem;">
+
+    <div>
+      <p style="font-size:.88rem;color:var(--text-muted);margin-bottom:.5rem;">
+        Clear all chip assignments — sets every entry's SI chip to blank.
+        Use before re-running auto-assign or correcting a bulk mis-assignment.
+        Chip library entries are not affected.
+      </p>
+      <div style="display:flex;gap:.75rem;align-items:center;flex-wrap:wrap;">
+        <form method="post" action="/chips/clear-assignments"
+              onsubmit="return confirm('Clear ALL chip assignments? This cannot be undone.')">
+          <button type="submit" class="btn btn-danger">Clear All Chip Assignments</button>
+        </form>
+        {% if courses %}
+        <form method="post" action="/chips/clear-assignments"
+              style="display:flex;gap:.4rem;align-items:center;"
+              onsubmit="return this.querySelector('select').value
+                         ? confirm('Clear chip assignments for this course?')
+                         : (alert('Select a course first.'), false)">
+          <select name="course_id" style="font-size:.85rem;padding:.3rem .5rem;">
+            <option value="">— Pick a course —</option>
+            {% for c in courses %}
+            <option value="{{ c.id }}">{{ c.name }}</option>
+            {% endfor %}
+          </select>
+          <button type="submit" class="btn btn-danger btn-sm">Clear Course</button>
+        </form>
+        {% endif %}
+      </div>
+    </div>
+
+    <hr style="border:none;border-top:1px solid var(--border);margin:0;">
+    <div>
+      <p style="font-size:.88rem;color:var(--text-muted);margin-bottom:.5rem;">
+        Clear all results to reset the race. Team registrations and course setups are kept —
+        only punch records, times, and adjustments are removed.
+      </p>
+      <form method="post" action="/settings/clear-results"
+            onsubmit="return confirm('Delete ALL punches, times, and adjustments for every entry?\nTeams stay enrolled. This cannot be undone.')">
+        <button type="submit" class="btn btn-danger">Clear All Results</button>
+      </form>
+    </div>
+
+    <hr style="border:none;border-top:1px solid var(--border);margin:0;">
+    <div>
+      <p style="font-size:.88rem;color:var(--text-muted);margin-bottom:.5rem;">
+        Clear all teams (racers) and everything attached to them — enrollments, punches,
+        and adjustments. Use this to wipe a test import before re-importing.
+        Courses and controls are not affected.
+      </p>
+      <form method="post" action="/settings/clear-racers"
+            onsubmit="return confirm('Delete ALL teams and their results?\nCourses and controls are kept. This cannot be undone.')">
+        <button type="submit" class="btn btn-danger">Clear All Racers</button>
+      </form>
+    </div>
+
+  </div>
+</div>
+
+{% endblock %}

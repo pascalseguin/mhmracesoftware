@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+{% block title %}Import Teams — Preview{% endblock %}
+
+{% block page_header %}
+<div class="page-header">
+  <h1>Import Teams — Preview</h1>
+  <p>Review each row before saving. Adjust class names or merge decisions as needed.</p>
+</div>
+{% endblock %}
+
+{% block content %}
+
+<!-- Summary bar -->
+<div class="card" style="padding:.75rem 1rem;margin-bottom:.75rem;">
+  <div style="display:flex;gap:1.25rem;align-items:center;flex-wrap:wrap;">
+    <strong style="font-size:.9rem;">{{ rows|length }} rows</strong>
+    {% if n_new %}
+    <span style="padding:.2rem .55rem;background:#dcfce7;color:#166534;border-radius:4px;font-size:.8rem;font-weight:600;">
+      {{ n_new }} new
+    </span>
+    {% endif %}
+    {% if n_fuzzy %}
+    <span style="padding:.2rem .55rem;background:#fef9c3;color:#854d0e;border-radius:4px;font-size:.8rem;font-weight:600;">
+      {{ n_fuzzy }} similar name found
+    </span>
+    {% endif %}
+    {% if n_exists %}
+    <span style="padding:.2rem .55rem;background:#f3f4f6;color:#6b7280;border-radius:4px;font-size:.8rem;font-weight:600;">
+      {{ n_exists }} already exist
+    </span>
+    {% endif %}
+    <span style="margin-left:auto;font-size:.8rem;color:var(--text-muted);">
+      <a href="#" onclick="setAll(true);return false;">Select all</a> ·
+      <a href="#" onclick="setAll(false);return false;">Select none</a>
+    </span>
+  </div>
+</div>
+
+<form method="post" action="/import/teams/confirm">
+  <input type="hidden" name="token" value="{{ token }}">
+
+  <div class="card" style="padding:0;overflow:hidden;">
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:36px;text-align:center;">
+              <input type="checkbox" id="select-all" onchange="setAll(this.checked)" checked>
+            </th>
+            <th style="width:70px;">Bib</th>
+            <th>Team Name</th>
+            <th style="min-width:200px;">Status / Action</th>
+            <th style="min-width:140px;">Class</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in rows %}
+          {% set i = loop.index0 %}
+          {% if row.exact_racer_id %}
+            {% set row_bg = "#f9fafb" %}
+          {% elif row.fuzzy_teams %}
+            {% set row_bg = "#fffbeb" %}
+          {% else %}
+            {% set row_bg = "transparent" %}
+          {% endif %}
+          <tr style="background:{{ row_bg }};">
+
+            <!-- Include checkbox -->
+            <td style="text-align:center;vertical-align:middle;">
+              <input type="checkbox" name="include_{{ i }}" value="1"
+                     class="row-cb"
+                     {% if not row.exact_racer_id %}checked{% endif %}>
+            </td>
+
+            <!-- Bib -->
+            <td style="font-size:.85rem;color:var(--text-muted);vertical-align:middle;">
+              {{ row.bib or "—" }}
+            </td>
+
+            <!-- Team name -->
+            <td style="vertical-align:middle;">
+              <strong style="font-size:.9rem;">{{ row.name }}</strong>
+            </td>
+
+            <!-- Status / merge picker -->
+            <td style="vertical-align:middle;font-size:.83rem;">
+              {% if row.exact_racer_id %}
+                <div style="display:flex;align-items:center;gap:.4rem;flex-wrap:wrap;">
+                  <span style="padding:.15rem .4rem;background:#e5e7eb;color:#374151;
+                               border-radius:3px;font-size:.75rem;white-space:nowrap;">already exists</span>
+                  <!-- Always update when checked: hidden resolve pointing at the existing record -->
+                  <input type="hidden" name="resolve_{{ i }}" value="update:{{ row.exact_racer_id }}">
+                  <span style="color:var(--text-muted);font-size:.75rem;">(check to update bib / class)</span>
+                </div>
+
+              {% elif row.fuzzy_teams %}
+                <div>
+                  <div style="font-size:.75rem;color:#92400e;margin-bottom:.3rem;">
+                    ⚠ Similar to existing team{{ 's' if row.fuzzy_teams|length > 1 }}:
+                  </div>
+                  <select name="resolve_{{ i }}" style="font-size:.82rem;max-width:100%;">
+                    <option value="create">Create new "{{ row.name }}"</option>
+                    {% for m in row.fuzzy_teams %}
+                    <option value="update:{{ m.id }}">
+                      Update "{{ m.name }}" ({{ m.score }}% match)
+                    </option>
+                    {% endfor %}
+                  </select>
+                </div>
+
+              {% else %}
+                <input type="hidden" name="resolve_{{ i }}" value="create">
+                <span style="color:#166534;font-size:.78rem;">New team</span>
+              {% endif %}
+            </td>
+
+            <!-- Class input -->
+            <td style="vertical-align:middle;">
+              {% if row.class_corrected %}
+              <div style="font-size:.72rem;color:#92400e;margin-bottom:.2rem;"
+                   title="CSV had: {{ row.class_name }}">
+                ⚠ corrected from "{{ row.class_name }}"
+              </div>
+              {% elif not row.class_name %}
+              <!-- no class in CSV — leave placeholder hint -->
+              {% endif %}
+              <input type="text" name="class_{{ i }}"
+                     value="{{ row.resolved_class }}"
+                     placeholder="(no class)"
+                     style="width:130px;font-size:.83rem;"
+                     list="class-suggestions">
+            </td>
+
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Datalist for class autocomplete -->
+  <datalist id="class-suggestions">
+    {% for row in rows if row.resolved_class %}
+    <option value="{{ row.resolved_class }}">
+    {% endfor %}
+  </datalist>
+
+  <div style="display:flex;gap:.75rem;align-items:center;margin-top:.75rem;">
+    <button type="submit" class="btn btn-primary">Import Selected</button>
+    <a href="/import" class="btn">Cancel</a>
+    <span style="font-size:.82rem;color:var(--text-muted);">
+      Class names are created automatically if they don't exist.
+      Auto-enrollment happens based on class → course links set in
+      <a href="/classes">Classes</a>.
+    </span>
+  </div>
+</form>
+
+<script>
+function setAll(checked) {
+  document.querySelectorAll('.row-cb').forEach(function(cb) { cb.checked = checked; });
+  document.getElementById('select-all').checked = checked;
+}
+</script>
+{% endblock %}

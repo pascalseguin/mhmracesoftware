@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}Finalize Results{% endblock %}
+
+{% block page_header %}
+<div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:.75rem;">
+  <div>
+    <h1>Finalize Results</h1>
+    <p>Pre-export validation — review all flagged items before exporting the official leaderboard</p>
+  </div>
+  <div style="display:flex;gap:.5rem;">
+    <a href="/results" class="btn btn-secondary">&#8592; Back to Results</a>
+    <a href="/export/results" target="_blank"
+       class="btn {% if has_problems %}btn-secondary{% else %}btn-primary{% endif %}"
+       {% if has_problems %}
+       onclick="return confirm('There are potential issues. Export anyway?')"
+       {% endif %}>
+      &#8681; Export Leaderboard
+    </a>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{% if not issues and not warnings %}
+<div class="card" style="border-left:4px solid var(--success);padding:1.25rem 1.5rem;">
+  <p style="font-size:1rem;font-weight:600;color:var(--success);">&#10003; No issues found</p>
+  <p style="color:var(--text-muted);margin-top:.25rem;font-size:.88rem;">
+    All entries look good. You can export the leaderboard.
+  </p>
+</div>
+{% endif %}
+
+{% if issues %}
+<div class="card" style="border-left:4px solid var(--danger);">
+  <h2 style="color:var(--danger);margin-bottom:.75rem;">
+    &#9888; {{ issues | length }} Issue{{ "s" if issues | length != 1 }} Require Attention
+  </h2>
+  <p style="font-size:.83rem;color:var(--text-muted);margin-bottom:.75rem;">
+    These are definite data problems that will produce incorrect results if not resolved.
+  </p>
+  <ul style="list-style:none;display:flex;flex-direction:column;gap:.4rem;">
+    {% for issue in issues %}
+    <li style="font-size:.88rem;padding:.4rem .6rem;background:#fff5f5;border-radius:4px;border:1px solid #fcc;">
+      <span style="color:var(--danger);font-weight:600;margin-right:.4rem;">&#10007;</span>{{ issue.msg }}
+    </li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+{% if warnings %}
+<div class="card" style="border-left:4px solid var(--warning);margin-top:{% if issues %}0{% else %}0{% endif %};">
+  <h2 style="color:#856404;margin-bottom:.75rem;">
+    &#9432; {{ warnings | length }} Warning{{ "s" if warnings | length != 1 }}
+  </h2>
+  <p style="font-size:.83rem;color:var(--text-muted);margin-bottom:.75rem;">
+    Advisory items — review each one and confirm it is intentional before exporting.
+  </p>
+  <ul style="list-style:none;display:flex;flex-direction:column;gap:.4rem;">
+    {% for w in warnings %}
+    <li style="font-size:.88rem;padding:.4rem .6rem;background:#fffbea;border-radius:4px;border:1px solid #f5d87a;">
+      <span style="color:#856404;font-weight:600;margin-right:.4rem;">!</span>{{ w.msg }}
+    </li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+<div class="card" style="margin-top:0;padding:.75rem 1.25rem;">
+  <div style="display:flex;gap:1rem;align-items:center;flex-wrap:wrap;">
+    <p style="font-size:.85rem;color:var(--text-muted);flex:1;">
+      The Export Leaderboard button above opens the printable results page in a new tab.
+      From there, use <strong>File → Print → Save as PDF</strong> to generate the official PDF.
+    </p>
+    <a href="/export/results" target="_blank" class="btn btn-primary">&#8681; Export Leaderboard</a>
+  </div>
+</div>
+
+{% endblock %}

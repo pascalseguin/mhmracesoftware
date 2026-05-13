@@ -1,0 +1,346 @@
+{% extends "base.html" %}
+{% block title %}Chip Library{% endblock %}
+
+{% block page_header %}
+<div class="page-header">
+  <h1>Chip Library &amp; Assignment</h1>
+  <p>Manage SI chip names and assign chips to racer entries.</p>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{# ── Auto-assign action bar ───────────────────────────────────────────────── #}
+{% set blank_count    = entries | selectattr("si_chip", "none") | list | length %}
+{% set assigned_count = entries | rejectattr("si_chip", "none") | list | length %}
+<div style="display:flex;gap:.75rem;align-items:center;margin-bottom:1rem;flex-wrap:wrap;">
+
+  <form method="post" action="/chips/auto-assign"
+        onsubmit="return confirm('Auto-assign {{ chips | length }} chip(s) to {{ blank_count }} blank entries?\n\nChips are unique globally — no chip will be shared between racers.')">
+    <button type="submit" class="btn btn-primary"
+            {% if not chips or blank_count == 0 %}disabled title="No library chips or no blank entries"{% endif %}>
+      ⚡ Auto-Assign Chips
+    </button>
+  </form>
+
+  <span style="font-size:.84rem;color:var(--text-muted);">
+    {{ chips | length }} chip(s) in library ·
+    {{ blank_count }} without a chip ·
+    {{ assigned_count }} assigned ·
+    <a href="/settings#chip-assignments" style="font-size:.84rem;">Clear assignments →</a>
+  </span>
+</div>
+
+{# ── Two-column layout: library left, bulk assign right ───────────────────── #}
+<div style="display:grid;grid-template-columns:340px 1fr;gap:1.25rem;align-items:start;">
+
+  {# ── LEFT: library management ─────────────────────────────────────────── #}
+  <div>
+
+    {# Add / edit form #}
+    <div class="card">
+      <h2 id="chip-form-title">Add Chip</h2>
+      <form method="post" action="/chips/add" id="chip-form">
+        <input type="hidden" name="chip_id" id="chip-form-id" value="">
+        <div class="form-group">
+          <label>Chip Name</label>
+          <input type="text" name="name" id="chip-form-name"
+                 placeholder="e.g. Red 01" required maxlength="80">
+        </div>
+        <div class="form-group">
+          <label>SI Code</label>
+          <input type="number" name="si_code" id="chip-form-si"
+                 placeholder="e.g. 500123" min="1" required>
+        </div>
+        <div style="display:flex;gap:.5rem;">
+          <button type="submit" class="btn btn-primary btn-sm">Save</button>
+          <button type="button" class="btn btn-secondary btn-sm"
+                  onclick="resetChipForm()">Cancel</button>
+        </div>
+      </form>
+    </div>
+
+    {# Chip list #}
+    <div class="card" style="margin-top:1rem;">
+      <h2>Library ({{ chips | length }})</h2>
+      {% if chips %}
+      <table class="table" style="font-size:.86rem;">
+        <thead>
+          <tr><th>Name</th><th>SI Code</th><th></th></tr>
+        </thead>
+        <tbody>
+          {% for ch in chips %}
+          <tr>
+            <td>{{ ch.name }}</td>
+            <td style="font-family:monospace;">{{ ch.si_code }}</td>
+            <td style="white-space:nowrap;">
+              <button class="btn btn-secondary btn-sm"
+                      onclick="editChip({{ ch.id }}, {{ ch.name | tojson }}, {{ ch.si_code }})">
+                Edit
+              </button>
+              <form method="post" action="/chips/{{ ch.id }}/delete"
+                    style="display:inline;"
+                    onsubmit="return confirm('Delete chip {{ ch.name }}?')">
+                <button type="submit" class="btn btn-danger btn-sm">Del</button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <p style="color:var(--text-muted);font-size:.88rem;">
+        No chips yet — add one above or bulk import.
+      </p>
+      {% endif %}
+    </div>
+
+  </div>
+
+  {# ── RIGHT: bulk assignment table ─────────────────────────────────────── #}
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem;flex-wrap:wrap;gap:.5rem;">
+      <h2 style="margin:0;">Bulk Assignment</h2>
+      <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;">
+        <select id="course-filter" onchange="filterTable()"
+                style="font-size:.82rem;padding:.2rem .4rem;">
+          <option value="">— All Courses —</option>
+          {% for c in courses %}
+          <option value="{{ c.id }}">{{ c.name }}</option>
+          {% endfor %}
+        </select>
+        <input type="text" id="racer-filter" placeholder="Search racer…"
+               oninput="filterTable()"
+               style="font-size:.82rem;padding:.2rem .5rem;width:140px;">
+        <label style="font-size:.82rem;display:flex;align-items:center;gap:.3rem;cursor:pointer;">
+          <input type="checkbox" id="blank-only" onchange="filterTable()">
+          Blank only
+        </label>
+      </div>
+    </div>
+
+    {% if entries %}
+    <form method="post" action="/chips/bulk-assign">
+      <table class="table" style="font-size:.84rem;" id="assign-table">
+        <thead>
+          <tr>
+            <th>Bib</th>
+            <th>Team</th>
+            <th>Course</th>
+            <th>Chip (SI Code)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for e in entries %}
+          <tr data-course="{{ e.course_id }}"
+              data-racer="{{ e.racer_name | lower }}"
+              data-bib="{{ e.bib_number | lower }}"
+              data-blank="{{ '1' if not e.si_chip else '0' }}">
+            <td>{{ e.bib_number }}</td>
+            <td>{{ e.racer_name }}</td>
+            <td>{{ e.course_name }}</td>
+            <td>
+              <div style="display:flex;gap:.35rem;align-items:center;">
+                <input type="number" name="chip_{{ e.id }}"
+                       id="ci_{{ e.id }}"
+                       value="{{ e.si_chip if e.si_chip else '' }}"
+                       placeholder="SI code" min="1"
+                       style="width:110px;font-family:monospace;font-size:.82rem;padding:.2rem .4rem;">
+                {% if chips %}
+                <select onchange="pickChip(this,'ci_{{ e.id }}')"
+                        style="font-size:.8rem;padding:.2rem .3rem;max-width:140px;">
+                  <option value="">Lib…</option>
+                  {% for ch in chips %}
+                  <option value="{{ ch.si_code }}"
+                          {% if e.si_chip == ch.si_code %}selected{% endif %}>
+                    {{ ch.name }} ({{ ch.si_code }})
+                  </option>
+                  {% endfor %}
+                </select>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <div style="margin-top:.75rem;">
+        <button type="submit" class="btn btn-primary">Save All Assignments</button>
+      </div>
+    </form>
+    {% else %}
+    <p style="color:var(--text-muted);">
+      No race entries yet — add racers and enrol them in courses first.
+    </p>
+    {% endif %}
+  </div>
+
+</div>
+
+{# ── Team lookup ──────────────────────────────────────────────────────────── #}
+<div class="card" style="margin-top:1.25rem;">
+  <h2>Assign by Team</h2>
+  <p style="font-size:.84rem;color:var(--text-muted);margin-bottom:.75rem;">
+    Enter a bib number or team name to find a racer and assign chips per course.
+  </p>
+
+  <div style="display:flex;gap:.75rem;align-items:center;margin-bottom:.75rem;">
+    <input type="text" id="team-search"
+           placeholder="Bib or team name…"
+           oninput="teamSearch(this.value)"
+           style="width:260px;">
+    <button type="button" class="btn btn-secondary btn-sm"
+            onclick="clearTeamSearch()">Clear</button>
+  </div>
+
+  {# Hidden form — populated by JS when user submits #}
+  <form method="post" action="/chips/bulk-assign" id="team-form">
+    <div id="team-results" style="display:none;">
+      <table class="table" style="font-size:.87rem;" id="team-table">
+        <thead>
+          <tr>
+            <th>Bib</th>
+            <th>Team</th>
+            <th>Course</th>
+            <th style="min-width:240px;">Chip (SI Code)</th>
+          </tr>
+        </thead>
+        <tbody id="team-tbody"></tbody>
+      </table>
+      <div style="margin-top:.75rem;">
+        <button type="submit" class="btn btn-success">Save Team Assignment</button>
+      </div>
+    </div>
+    <p id="team-empty" style="color:var(--text-muted);font-size:.87rem;display:none;">
+      No matching entries found.
+    </p>
+  </form>
+
+</div>
+
+<script>
+// ── Chip library form ─────────────────────────────────────────────────────────
+function editChip(id, name, si) {
+  document.getElementById('chip-form-title').textContent = 'Edit Chip';
+  document.getElementById('chip-form-id').value   = id;
+  document.getElementById('chip-form-name').value = name;
+  document.getElementById('chip-form-si').value   = si;
+  document.getElementById('chip-form-name').focus();
+  document.getElementById('chip-form').scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+function resetChipForm() {
+  document.getElementById('chip-form-title').textContent = 'Add Chip';
+  document.getElementById('chip-form-id').value   = '';
+  document.getElementById('chip-form-name').value = '';
+  document.getElementById('chip-form-si').value   = '';
+}
+
+// ── Library dropdown → fill input ────────────────────────────────────────────
+function pickChip(sel, inputId) {
+  if (!sel.value) return;
+  var inp = document.getElementById(inputId);
+  if (inp) inp.value = sel.value;
+}
+
+// ── Bulk assignment table filter ─────────────────────────────────────────────
+function filterTable() {
+  var courseId  = document.getElementById('course-filter').value;
+  var q         = document.getElementById('racer-filter').value.toLowerCase();
+  var blankOnly = document.getElementById('blank-only').checked;
+  var rows      = document.querySelectorAll('#assign-table tbody tr');
+  rows.forEach(function(r) {
+    var ok = (!courseId  || r.dataset.course === courseId)
+          && (!q         || r.dataset.racer.includes(q) || r.dataset.bib.includes(q))
+          && (!blankOnly || r.dataset.blank === '1');
+    r.style.display = ok ? '' : 'none';
+  });
+}
+
+// ── Team lookup ───────────────────────────────────────────────────────────────
+// All entries from the template, keyed for fast JS lookup.
+var _allEntries = [
+  {% for e in entries %}
+  {
+    id:      {{ e.id }},
+    racer:   {{ e.racer_name | tojson }},
+    bib:     {{ e.bib_number | tojson }},
+    course:  {{ e.course_name | tojson }},
+    si_chip: {{ e.si_chip if e.si_chip else 'null' }}
+  }{% if not loop.last %},{% endif %}
+  {% endfor %}
+];
+
+var _chips = [
+  {% for ch in chips %}
+  { name: {{ ch.name | tojson }}, si_code: {{ ch.si_code }} }{% if not loop.last %},{% endif %}
+  {% endfor %}
+];
+
+function teamSearch(q) {
+  q = q.trim().toLowerCase();
+  var tbody   = document.getElementById('team-tbody');
+  var results = document.getElementById('team-results');
+  var empty   = document.getElementById('team-empty');
+
+  if (!q) {
+    results.style.display = 'none';
+    empty.style.display   = 'none';
+    tbody.innerHTML       = '';
+    return;
+  }
+
+  var matches = _allEntries.filter(function(e) {
+    return e.racer.toLowerCase().includes(q) || e.bib.toLowerCase() === q;
+  });
+
+  tbody.innerHTML = '';
+  if (matches.length === 0) {
+    results.style.display = 'none';
+    empty.style.display   = '';
+    return;
+  }
+
+  empty.style.display   = 'none';
+  results.style.display = '';
+
+  matches.forEach(function(e) {
+    var libOpts = '<option value="">— Enter code —</option>'
+                + _chips.map(function(ch) {
+                    var sel = e.si_chip === ch.si_code ? ' selected' : '';
+                    return '<option value="' + ch.si_code + '"' + sel + '>'
+                           + escHtml(ch.name) + ' (' + ch.si_code + ')</option>';
+                  }).join('');
+
+    var tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td>' + escHtml(e.bib)    + '</td>'
+    + '<td>' + escHtml(e.racer)  + '</td>'
+    + '<td>' + escHtml(e.course) + '</td>'
+    + '<td><div style="display:flex;gap:.35rem;align-items:center;">'
+    + '<input type="number" name="chip_' + e.id + '" id="tci_' + e.id + '"'
+    + '       value="' + (e.si_chip || '') + '" placeholder="SI code" min="1"'
+    + '       style="width:110px;font-family:monospace;font-size:.82rem;padding:.2rem .4rem;">'
+    + (_chips.length
+        ? '<select onchange="pickChip(this,\'tci_' + e.id + '\')"'
+          + '  style="font-size:.8rem;padding:.2rem .3rem;max-width:140px;">'
+          + libOpts + '</select>'
+        : '')
+    + '</div></td>';
+    tbody.appendChild(tr);
+  });
+}
+
+function clearTeamSearch() {
+  document.getElementById('team-search').value = '';
+  teamSearch('');
+}
+
+function escHtml(s) {
+  return String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+</script>
+
+{% endblock %}

@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+{% block title %}Classes{% endblock %}
+
+{% block page_header %}
+<div class="page-header">
+  <h1>Race Classes</h1>
+  <p>Define team categories — used for class-based ranking on the results board</p>
+</div>
+{% endblock %}
+
+{% block content %}
+
+<div class="card">
+  <h2>Add Class</h2>
+  <form method="post" action="/classes/add">
+    <div class="form-row">
+      <div class="form-group">
+        <label>Class Name *</label>
+        <input type="text" name="name" required placeholder="e.g. Elite, Open, Recreational" style="width:220px;">
+      </div>
+      <div style="align-self:flex-end;">
+        <button type="submit" class="btn btn-primary">Add Class</button>
+      </div>
+    </div>
+  </form>
+</div>
+
+{% if classes %}
+<div class="card">
+  <h2>Classes</h2>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Name</th><th>Default Courses</th><th>Final Course</th><th colspan="2"></th></tr>
+      </thead>
+      <tbody>
+        {% for cls in classes %}
+        {% set cls_course_ids = class_courses_map.get(cls.id) or [] %}
+        <tr>
+          <td>{{ cls.name }}</td>
+          <td style="font-size:.85rem;color:var(--text-muted);">
+            {% if cls_course_ids %}
+              {% for c in courses if c.id in cls_course_ids %}
+                <span style="display:inline-block;padding:.1rem .4rem;background:#e8f0fe;
+                             color:#1a56db;border-radius:3px;margin:.1rem .2rem .1rem 0;font-size:.78rem;">{{ c.name }}</span>
+              {% endfor %}
+            {% else %}
+              <span style="font-style:italic;">None</span>
+            {% endif %}
+          </td>
+          <td style="font-size:.82rem;">
+            {% if cls.final_course_id %}
+              {% for c in courses if c.id == cls.final_course_id %}
+              <span style="display:inline-block;padding:.1rem .4rem;background:#fff3cd;
+                           color:#856404;border-radius:3px;font-size:.78rem;">🏁 {{ c.name }}</span>
+              {% endfor %}
+            {% else %}
+              <span style="color:var(--text-muted);font-style:italic;font-size:.78rem;">None</span>
+            {% endif %}
+          </td>
+          <td style="width:1px;white-space:nowrap;">
+            <details style="position:relative;">
+              <summary class="btn btn-secondary btn-sm" style="cursor:pointer;list-style:none;">Edit</summary>
+              <div style="position:absolute;right:0;top:2rem;background:white;border:1px solid var(--border);
+                          border-radius:6px;padding:1rem;z-index:20;min-width:240px;
+                          box-shadow:0 4px 12px rgba(0,0,0,.12);">
+                <p style="font-weight:600;font-size:.85rem;margin:0 0 .5rem;">Edit Class</p>
+                <form method="post" action="/classes/{{ cls.id }}/edit" style="margin-bottom:.75rem;">
+                  <div class="form-group" style="margin-bottom:.4rem;">
+                    <label style="font-size:.78rem;color:var(--text-muted);">Name</label>
+                    <input type="text" name="name" value="{{ cls.name }}" required style="width:100%;">
+                  </div>
+                  <div class="form-group" style="margin-bottom:.6rem;">
+                    <label style="font-size:.78rem;color:var(--text-muted);">Final Course</label>
+                    <p style="font-size:.73rem;color:var(--text-muted);margin:.1rem 0 .3rem;">
+                      Chip read on this course auto-marks team as Finished.
+                    </p>
+                    <select name="final_course_id" style="width:100%;font-size:.85rem;">
+                      <option value="">— None —</option>
+                      {% for c in courses %}
+                      <option value="{{ c.id }}" {% if cls.final_course_id == c.id %}selected{% endif %}>{{ c.name }}</option>
+                      {% endfor %}
+                    </select>
+                  </div>
+                  <button type="submit" class="btn btn-primary btn-sm">Save</button>
+                </form>
+                <hr style="border:none;border-top:1px solid var(--border);margin:.5rem 0;">
+                <p style="font-weight:600;font-size:.85rem;margin:0 0 .3rem;">Default Courses</p>
+                <p style="font-size:.78rem;color:var(--text-muted);margin:0 0 .5rem;">
+                  Racers assigned to this class are auto-enrolled in these courses.
+                </p>
+                <form method="post" action="/classes/{{ cls.id }}/courses">
+                  {% if courses %}
+                    {% for c in courses %}
+                    <label style="display:flex;align-items:center;gap:.4rem;margin-bottom:.3rem;font-size:.85rem;cursor:pointer;">
+                      <input type="checkbox" name="course_id" value="{{ c.id }}"
+                             {% if c.id in cls_course_ids %}checked{% endif %}>
+                      {{ c.name }}
+                    </label>
+                    {% endfor %}
+                  {% else %}
+                    <p style="color:var(--text-muted);font-size:.82rem;">No courses yet.</p>
+                  {% endif %}
+                  <button type="submit" class="btn btn-primary btn-sm" style="margin-top:.5rem;width:100%;">Save Courses</button>
+                </form>
+              </div>
+            </details>
+          </td>
+          <td style="width:1px;">
+            <form method="post" action="/classes/{{ cls.id }}/delete"
+                  onsubmit="return confirm('Delete class {{ cls.name }}? Racers in this class will become unclassified.')">
+              <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+<div class="card">
+  <p style="color:var(--text-muted);">No classes yet. Add one above, then assign teams in <a href="/racers">Racers</a>.</p>
+</div>
+{% endif %}
+
+<div class="card" style="border-left:3px solid var(--accent);">
+  <h2>How Classes Work</h2>
+  <ul style="font-size:.88rem;line-height:1.9;color:var(--text-muted);padding-left:1.25rem;">
+    <li>Use <strong>Edit → Default Courses</strong> on each class to link it to one or more courses.</li>
+    <li>When a class is assigned to a team, they are automatically enrolled in that class's default courses.</li>
+    <li>A team's class score is the <strong>sum of their points across all courses they entered</strong>.</li>
+    <li>The <a href="/results">Results</a> page shows each team's score per course and their overall rank within their class.</li>
+    <li>Teams with no class assigned appear in an "Unclassified" section at the bottom.</li>
+  </ul>
+</div>
+
+{% endblock %}

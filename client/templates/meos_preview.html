@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+{% block title %}MeOS Import Preview{% endblock %}
+
+{% block page_header %}
+<div class="page-header">
+  <h1>MeOS Import Preview</h1>
+  <p>Review and select what to import from <strong>{{ event_name }}</strong></p>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{% if warnings %}
+<div class="card" style="border-left:3px solid #e67e22;">
+  <h3 style="margin-top:0;color:#e67e22;">Warnings</h3>
+  <ul style="margin:0;padding-left:1.25rem;font-size:.88rem;color:var(--text-muted);">
+    {% for w in warnings %}<li>{{ w }}</li>{% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+<form method="post" action="/import/meos/confirm">
+  <input type="hidden" name="token" value="{{ token }}">
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.25rem;align-items:start;">
+
+    <!-- Courses -->
+    <div class="card" style="margin:0;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem;">
+        <h2 style="margin:0;">Courses <span style="font-weight:400;font-size:.88rem;color:var(--text-muted);">({{ courses|length }})</span></h2>
+        <div style="display:flex;gap:.5rem;">
+          <button type="button" class="btn btn-sm"
+                  onclick="setAll('course_ids', true)">All</button>
+          <button type="button" class="btn btn-sm"
+                  onclick="setAll('course_ids', false)">None</button>
+        </div>
+      </div>
+
+      {% if courses %}
+      <div style="display:flex;flex-direction:column;gap:.6rem;">
+        {% for course in courses %}
+        <label style="display:flex;align-items:flex-start;gap:.6rem;padding:.55rem .7rem;
+                      border:1px solid var(--border);border-radius:4px;cursor:pointer;
+                      background:#fafafa;">
+          <input type="checkbox" name="course_ids" value="{{ course.course_id }}"
+                 checked style="margin-top:.2rem;flex-shrink:0;">
+          <div style="flex:1;min-width:0;">
+            <div style="font-weight:600;font-size:.92rem;">{{ course.name }}</div>
+            <div style="font-size:.8rem;color:var(--text-muted);margin-top:.15rem;">
+              {{ course.time_limit_minutes }} min limit
+              {% if course.overtime_penalty %} · {{ course.overtime_penalty }} pts/min overtime{% endif %}
+              · {{ course.controls|length }} controls
+              ({{ course.scoring_controls|length }} scoring)
+            </div>
+            {% if course.scoring_controls %}
+            <div style="font-size:.77rem;color:var(--text-muted);margin-top:.25rem;
+                        font-family:monospace;line-height:1.6;">
+              {% for c in course.scoring_controls %}
+              <span style="display:inline-block;background:#eee;padding:0 .35rem;
+                           border-radius:3px;margin:.1rem .15rem 0 0;">
+                {{ c.si_code }}{% if c.name %} {{ c.name }}{% endif %} ({{ c.points }}pt)
+              </span>
+              {% endfor %}
+            </div>
+            {% endif %}
+          </div>
+        </label>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p style="color:var(--text-muted);">No courses found in this backup.</p>
+      {% endif %}
+    </div>
+
+    <!-- Teams -->
+    <div class="card" style="margin:0;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem;">
+        <h2 style="margin:0;">Teams <span style="font-weight:400;font-size:.88rem;color:var(--text-muted);">({{ teams|length }})</span></h2>
+        <div style="display:flex;gap:.5rem;">
+          <button type="button" class="btn btn-sm"
+                  onclick="setAll('club_ids', true)">All</button>
+          <button type="button" class="btn btn-sm"
+                  onclick="setAll('club_ids', false)">None</button>
+        </div>
+      </div>
+
+      {% if teams %}
+      <div style="display:flex;flex-direction:column;gap:.4rem;max-height:70vh;overflow-y:auto;">
+        {% for team in teams %}
+        <label style="display:flex;align-items:flex-start;gap:.6rem;padding:.45rem .7rem;
+                      border:1px solid var(--border);border-radius:4px;cursor:pointer;
+                      background:#fafafa;">
+          <input type="checkbox" name="club_ids" value="{{ team.club_id }}"
+                 checked style="margin-top:.2rem;flex-shrink:0;">
+          <div style="flex:1;min-width:0;">
+            <div style="display:flex;gap:.5rem;align-items:baseline;">
+              {% if team.bib %}
+              <span style="font-size:.78rem;font-weight:600;color:var(--text-muted);
+                           font-family:monospace;">#{{ team.bib }}</span>
+              {% endif %}
+              <span style="font-weight:600;font-size:.9rem;">{{ team.name }}</span>
+            </div>
+            {% if team.entries %}
+            <div style="font-size:.78rem;color:var(--text-muted);margin-top:.1rem;">
+              {% for entry in team.entries %}
+              {{ entry.course_name }}{% if entry.si_chip %} (chip {{ entry.si_chip }}){% endif %}{% if not loop.last %} · {% endif %}
+              {% endfor %}
+            </div>
+            {% endif %}
+          </div>
+        </label>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p style="color:var(--text-muted);">No teams found in this backup.</p>
+      {% endif %}
+    </div>
+
+  </div><!-- /grid -->
+
+  <div style="display:flex;gap:.75rem;margin-top:1.25rem;align-items:center;">
+    <button type="submit" class="btn btn-primary">Import Selected</button>
+    <a href="/import" class="btn">Cancel</a>
+    <span style="font-size:.82rem;color:var(--text-muted);">
+      Teams are enrolled into whichever selected courses their MeOS entries reference.
+    </span>
+  </div>
+</form>
+
+<script>
+function setAll(name, checked) {
+  document.querySelectorAll('input[name="' + name + '"]').forEach(function(cb) {
+    cb.checked = checked;
+  });
+}
+</script>
+{% endblock %}

@@ -1,0 +1,496 @@
+{% extends "base.html" %}
+{% block title %}Courses{% endblock %}
+
+{% block page_header %}
+<div class="page-header">
+  <h1>Course Setup</h1>
+  <p>Define courses, control points, and scoring rules</p>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{% if error %}
+<div class="alert" style="margin-bottom:1rem;padding:.6rem 1rem;background:#f8d7da;border:1px solid #f5c6cb;border-radius:4px;color:#721c24;font-size:.88rem;">
+  {{ error }}
+</div>
+{% endif %}
+
+<!-- SI Code numbering guide -->
+<details class="card" style="padding:.75rem 1.25rem;">
+  <summary style="cursor:pointer;font-size:.85rem;font-weight:600;text-transform:uppercase;
+                  letter-spacing:.04em;color:var(--text-muted);list-style:none;
+                  display:flex;align-items:center;gap:.5rem;">
+    <span style="font-size:1rem;">&#9432;</span> SI Code Numbering &amp; Offset — How to avoid mismatches
+  </summary>
+  <div style="margin-top:.9rem;font-size:.86rem;line-height:1.65;color:var(--text);
+              display:grid;grid-template-columns:1fr 1fr;gap:1.25rem 2rem;max-width:860px;">
+    <div>
+      <p style="font-weight:600;margin-bottom:.3rem;">The problem</p>
+      <p>The SportIdent library reads only 8 bits of the station's 12-bit code number.
+         Stations numbered <strong>256–511</strong> come back as
+         <code>actual &minus; 256</code> — so station 310 arrives as code 54.
+         The <em>SI CN Offset</em> setting (default 256) corrects this by adding 256
+         back before matching punches to controls.</p>
+    </div>
+    <div>
+      <p style="font-weight:600;margin-bottom:.3rem;">The clean fix — pick one range</p>
+      <p>Collisions are impossible if <strong>all</strong> your stations stay within a
+         single range. Choose one and stick to it:</p>
+      <ul style="margin:.4rem 0 0 1.1rem;display:flex;flex-direction:column;gap:.2rem;">
+        <li><strong>Stations 1–255:</strong> set <em>SI CN Offset</em> to <code>0</code>.</li>
+        <li><strong>Stations 256–511:</strong> keep <em>SI CN Offset</em> at <code>256</code> (default).</li>
+      </ul>
+    </div>
+    <div>
+      <p style="font-weight:600;margin-bottom:.3rem;">Mixed ranges</p>
+      <p>The software checks each punch against configured controls first. If the raw code
+         matches it uses it as-is; otherwise it applies the offset. Collision only occurs
+         if you configure both control 20 and control 276 in the same course.</p>
+    </div>
+    <div>
+      <p style="font-weight:600;margin-bottom:.3rem;">Reserved SI codes</p>
+      <ul style="margin:.4rem 0 0 1.1rem;display:flex;flex-direction:column;gap:.2rem;">
+        <li><code>1</code> Clear · <code>2</code> Check · <code>3</code> Start · <code>4</code> Finish</li>
+        <li><code>148</code> Start (old) · <code>149</code> Finish (old)</li>
+      </ul>
+      <p style="margin-top:.5rem;">Change offset in <a href="/settings">Settings</a> → <em>SI CN Offset</em>.</p>
+    </div>
+  </div>
+</details>
+
+<div class="card">
+  <h2>Add Course</h2>
+  <form method="post" action="/courses/add" id="add-course-form">
+    <div class="form-row" style="flex-wrap:wrap;">
+      <div class="form-group">
+        <label>Course Name *</label>
+        <input type="text" name="name" required placeholder="e.g. Full Race" style="width:180px;">
+      </div>
+      <div class="form-group">
+        <label>Overtime Penalty (pts/min over)</label>
+        <input type="number" name="overtime_penalty_per_minute" value="0" min="0" style="width:80px;">
+      </div>
+    </div>
+    <div class="form-row" style="flex-wrap:wrap;margin-top:.25rem;">
+      <div class="form-group" id="add_start_group">
+        <label>Start Time * <span style="font-weight:400;text-transform:none;font-size:.75rem;color:var(--text-muted);">(mass start)</span></label>
+        <input type="datetime-local" name="start_time" id="add_start_time" required style="width:190px;">
+      </div>
+      <div class="form-group">
+        <label>End Time *</label>
+        <input type="datetime-local" name="end_time" required style="width:190px;">
+      </div>
+      <div class="form-group">
+        <label>Cut-off Time <span style="font-weight:400;text-transform:none;font-size:.75rem;color:var(--text-muted);">(DSQ if late, optional)</span></label>
+        <input type="datetime-local" name="cutoff_time" style="width:190px;">
+      </div>
+      <div class="form-group" style="flex-direction:row;align-items:center;gap:.4rem;align-self:flex-end;padding-bottom:.45rem;">
+        <input type="checkbox" name="use_si_start" value="true" id="add_use_si"
+               onchange="toggleAddStartRequired(this)">
+        <label for="add_use_si" style="text-transform:none;font-size:.88rem;font-weight:normal;white-space:nowrap;">Use SI start beacon</label>
+      </div>
+      <div style="align-self:flex-end;">
+        <button type="submit" class="btn btn-primary">Add Course</button>
+      </div>
+    </div>
+  </form>
+</div>
+
+<script>
+function toggleAddStartRequired(cb) {
+  var inp = document.getElementById('add_start_time');
+  var grp = document.getElementById('add_start_group');
+  inp.required = !cb.checked;
+  grp.style.opacity = cb.checked ? '0.45' : '1';
+}
+function toggleEditStartRequired(cb, courseId) {
+  var inp = document.getElementById('edit_start_' + courseId);
+  var grp = document.getElementById('edit_start_group_' + courseId);
+  inp.required = !cb.checked;
+  grp.style.opacity = cb.checked ? '0.45' : '1';
+}
+
+/* ── Generic column sort ───────────────────────────────────────────────────── */
+function sortTable(th, tableId) {
+  var tbl   = document.getElementById(tableId);
+  var tbody = tbl.querySelector('tbody');
+  var col   = th.cellIndex;
+  var asc   = th.dataset.sort !== 'asc';
+
+  tbl.querySelectorAll('thead th').forEach(function(h) {
+    h.dataset.sort = '';
+    var ind = h.querySelector('.si');
+    if (ind) ind.textContent = '';
+  });
+  th.dataset.sort = asc ? 'asc' : 'desc';
+  var ind = th.querySelector('.si');
+  if (ind) ind.textContent = asc ? ' ▲' : ' ▼';
+
+  Array.from(tbody.querySelectorAll('tr')).sort(function(a, b) {
+    var av = a.cells[col] ? a.cells[col].textContent.trim() : '';
+    var bv = b.cells[col] ? b.cells[col].textContent.trim() : '';
+    var an = parseFloat(av.replace(/[^0-9.\-]/g, ''));
+    var bn = parseFloat(bv.replace(/[^0-9.\-]/g, ''));
+    if (!isNaN(an) && !isNaN(bn)) return asc ? an - bn : bn - an;
+    return asc ? av.localeCompare(bv) : bv.localeCompare(av);
+  }).forEach(function(r) { tbody.appendChild(r); });
+}
+
+/* ── Circuit group management ──────────────────────────────────────────────── */
+function syncGroups(courseId) {
+  var list = document.getElementById('grp-list-' + courseId);
+  if (!list) return;
+  var groups = [];
+  list.querySelectorAll('.grp-row').forEach(function(row) {
+    var nm = row.querySelector('input[name="grp_name"]');
+    if (nm && nm.value.trim()) groups.push(nm.value.trim());
+  });
+  document.querySelectorAll('.circuit-sel-' + courseId).forEach(function(sel) {
+    var cur = sel.value;
+    sel.innerHTML = '<option value="">—</option>';
+    groups.forEach(function(g) {
+      var opt = document.createElement('option');
+      opt.value = g; opt.textContent = g;
+      if (g === cur) opt.selected = true;
+      sel.appendChild(opt);
+    });
+    if (!groups.includes(cur)) sel.value = '';
+  });
+}
+
+function addGrpRow(courseId) {
+  var list = document.getElementById('grp-list-' + courseId);
+  var row = document.createElement('div');
+  row.className = 'grp-row';
+  row.style.cssText = 'display:flex;gap:.3rem;align-items:center;margin-bottom:.3rem;';
+  row.innerHTML =
+    '<input type="text" name="grp_name" placeholder="Name"' +
+    ' style="width:65px;font-family:monospace;font-size:.82rem;"' +
+    ' oninput="syncGroups(\'' + courseId + '\')">' +
+    '<input type="number" name="grp_penalty" placeholder="pen" min="0"' +
+    ' style="width:58px;font-size:.82rem;" title="Circuit miss penalty (pts)">' +
+    '<button type="button" onclick="removeGrpRow(this,\'' + courseId + '\')"' +
+    ' style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:.9rem;padding:0 .2rem;flex-shrink:0;">✕</button>';
+  list.appendChild(row);
+}
+
+function removeGrpRow(btn, courseId) {
+  btn.closest('.grp-row').remove();
+  syncGroups(courseId);
+}
+
+function applyDefaultMiss(courseId) {
+  var defVal = document.getElementById('def-miss-' + courseId);
+  if (!defVal) return;
+  var val = defVal.value;
+  document.querySelectorAll('.mand-cb-' + courseId + ':checked').forEach(function(cb) {
+    var inp = document.getElementById(cb.dataset.misspen);
+    if (inp) inp.value = val;
+  });
+}
+
+function onMandatoryChange(cb, courseId, misPenId) {
+  var inp = document.getElementById(misPenId);
+  if (!inp) return;
+  if (cb.checked) {
+    var defVal = document.getElementById('def-miss-' + courseId);
+    if (defVal && defVal.value && inp.value == '0') inp.value = defVal.value;
+  }
+}
+</script>
+
+{% for item in courses_with_controls %}
+{% set c = item.course %}
+{% set controls = item.controls %}
+{% set circuit_groups = item.circuit_groups %}
+<div class="card">
+
+  <!-- Course header -->
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;flex-wrap:wrap;gap:.5rem;">
+    <h2 style="margin-bottom:0;">{{ c.name }}
+      <span style="font-size:.75rem;font-weight:400;color:var(--text-muted);text-transform:none;">
+        {% if c.overtime_penalty_per_minute %}-{{ c.overtime_penalty_per_minute }}pts/min overtime · {% endif %}
+        {% if c.use_si_start %}
+          SI start beacon{% if c.start_time %} (fallback {{ c.start_time[:16] | replace("T", " ") }}){% endif %}
+        {% elif c.start_time %}
+          Mass start {{ c.start_time[:16] | replace("T", " ") }}
+        {% else %}
+          <span style="color:var(--warning);">No start time set</span>
+        {% endif %}
+        {% if c.end_time %} · End {{ c.end_time[:16] | replace("T", " ") }}{% endif %}
+        {% if c.cutoff_time %} · Cut-off {{ c.cutoff_time[:16] | replace("T", " ") }}{% endif %}
+      </span>
+    </h2>
+    <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;">
+      <!-- Export CSV -->
+      <a href="/courses/{{ c.id }}/export.csv" class="btn btn-secondary btn-sm"
+         title="Download controls as CSV">&#8681; Export CSV</a>
+      <!-- Edit course -->
+      <details style="position:relative;">
+        <summary class="btn btn-secondary btn-sm" style="cursor:pointer;list-style:none;">Edit Course</summary>
+        <div style="position:absolute;right:0;top:2rem;background:white;border:1px solid var(--border);
+                    border-radius:6px;padding:1rem;z-index:20;min-width:300px;box-shadow:0 4px 12px rgba(0,0,0,.12);">
+          <form method="post" action="/courses/{{ c.id }}/edit">
+            <div class="form-group" style="margin-bottom:.5rem;">
+              <label>Course Name</label>
+              <input type="text" name="name" value="{{ c.name }}" required style="width:100%;">
+            </div>
+            <div class="form-group" style="margin-bottom:.5rem;">
+              <label>Overtime Penalty (pts/min)</label>
+              <input type="number" name="overtime_penalty_per_minute" value="{{ c.overtime_penalty_per_minute }}" style="width:80px;">
+            </div>
+            <div class="form-group" id="edit_start_group_{{ c.id }}"
+                 style="margin-bottom:.5rem;{% if c.use_si_start %}opacity:.45;{% endif %}">
+              <label>Start Time{% if not c.use_si_start %} *{% endif %} <span style="font-weight:400;text-transform:none;font-size:.74rem;color:var(--text-muted);">(mass start)</span></label>
+              <input type="datetime-local" name="start_time" id="edit_start_{{ c.id }}"
+                     value="{{ c.start_time[:16] if c.start_time else '' }}"
+                     {% if not c.use_si_start %}required{% endif %}
+                     style="width:100%;">
+            </div>
+            <div class="form-group" style="margin-bottom:.5rem;">
+              <label>End Time *</label>
+              <input type="datetime-local" name="end_time" required
+                     value="{{ c.end_time[:16] if c.end_time else '' }}"
+                     style="width:100%;">
+            </div>
+            <div class="form-group" style="margin-bottom:.5rem;">
+              <label>Cut-off Time</label>
+              <input type="datetime-local" name="cutoff_time"
+                     value="{{ c.cutoff_time[:16] if c.cutoff_time else '' }}"
+                     style="width:100%;">
+            </div>
+            <div class="form-group" style="flex-direction:row;align-items:center;gap:.4rem;margin-bottom:.75rem;">
+              <input type="checkbox" name="use_si_start" value="true"
+                     id="edit_use_si_{{ c.id }}"
+                     {% if c.use_si_start %}checked{% endif %}
+                     onchange="toggleEditStartRequired(this, {{ c.id }})">
+              <label for="edit_use_si_{{ c.id }}" style="text-transform:none;font-size:.88rem;font-weight:normal;">
+                Use SI start beacon instead of course start time
+              </label>
+            </div>
+            <button type="submit" class="btn btn-primary btn-sm">Save</button>
+          </form>
+        </div>
+      </details>
+      <!-- Delete course -->
+      <form method="post" action="/courses/{{ c.id }}/delete"
+            onsubmit="return confirm('Delete course {{ c.name }} and all its controls?')">
+        <button type="submit" class="btn btn-danger btn-sm">Delete Course</button>
+      </form>
+    </div>
+  </div>
+
+  {% if controls %}
+  {# Assignments form — group definitions are inside; control inputs reference it via form= attribute #}
+  <form id="assign-{{ c.id }}" method="post" action="/courses/{{ c.id }}/controls/bulk-assign">
+
+    <div style="display:grid;grid-template-columns:210px 1fr;gap:1rem;align-items:start;margin-bottom:1rem;">
+
+      {# LEFT: Circuit group definitions + default miss penalty + save button #}
+      <div style="padding:.75rem;background:var(--bg);border:1px solid var(--border);border-radius:6px;position:sticky;top:1rem;">
+
+        <p style="font-size:.78rem;font-weight:600;text-transform:uppercase;color:var(--text-muted);margin:0 0 .4rem;">
+          Circuit Groups
+        </p>
+        <p style="font-size:.75rem;color:var(--text-muted);margin:0 0 .5rem;">Name + miss penalty (pts)</p>
+
+        <div id="grp-list-{{ c.id }}">
+          {% for grp_name, gd in circuit_groups.items() %}
+          <div class="grp-row" style="display:flex;gap:.3rem;align-items:center;margin-bottom:.3rem;">
+            <input type="text" name="grp_name" value="{{ grp_name }}"
+                   placeholder="Name" style="width:65px;font-family:monospace;font-size:.82rem;"
+                   oninput="syncGroups('{{ c.id }}')">
+            <input type="number" name="grp_penalty" value="{{ gd.penalty }}"
+                   placeholder="pen" min="0" style="width:58px;font-size:.82rem;"
+                   title="Circuit miss penalty (pts)">
+            <button type="button" onclick="removeGrpRow(this,'{{ c.id }}')"
+                    style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:.9rem;padding:0 .2rem;flex-shrink:0;">✕</button>
+          </div>
+          {% endfor %}
+        </div>
+
+        <button type="button" class="btn btn-secondary btn-sm"
+                style="width:100%;font-size:.78rem;margin-top:.2rem;"
+                onclick="addGrpRow('{{ c.id }}')">+ Add Group</button>
+
+        <hr style="border:none;border-top:1px solid var(--border);margin:.65rem 0;">
+
+        <p style="font-size:.78rem;font-weight:600;text-transform:uppercase;color:var(--text-muted);margin:0 0 .3rem;">
+          Default Miss Penalty
+        </p>
+        <div style="display:flex;gap:.4rem;align-items:center;flex-wrap:wrap;margin-bottom:.65rem;">
+          <input type="number" id="def-miss-{{ c.id }}" value="0" min="0"
+                 style="width:65px;font-size:.82rem;" placeholder="pts">
+          <button type="button"
+                  style="font-size:.75rem;white-space:nowrap;padding:.25rem .5rem;background:none;
+                         border:1px solid var(--border);border-radius:4px;cursor:pointer;"
+                  onclick="applyDefaultMiss('{{ c.id }}')">Apply to checked</button>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-sm" style="width:100%;">Save Assignments</button>
+      </div>
+
+      {# RIGHT: Controls table (inputs reference assign-{c.id} via form attribute) #}
+      <div class="table-wrap">
+        <table id="ctrl-table-{{ c.id }}">
+          <thead>
+            <tr>
+              <th onclick="sortTable(this,'ctrl-table-{{ c.id }}')" style="cursor:pointer;white-space:nowrap;">SI Code<span class="si"></span></th>
+              <th onclick="sortTable(this,'ctrl-table-{{ c.id }}')" style="cursor:pointer;">Name<span class="si"></span></th>
+              <th onclick="sortTable(this,'ctrl-table-{{ c.id }}')" style="cursor:pointer;">Points<span class="si"></span></th>
+              <th style="white-space:nowrap;">Mandatory</th>
+              <th style="white-space:nowrap;">Miss Pen.</th>
+              <th>Order</th>
+              <th>Circuit</th>
+              <th colspan="2"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for cp in controls %}
+            {% set cgrp = cp["circuit_group"] if "circuit_group" in cp.keys() else "" %}
+            <tr>
+              <td><code>{{ cp.si_code }}</code></td>
+              <td>{{ cp.name or "—" }}</td>
+              <td>{{ cp.points }}</td>
+              <td style="text-align:center;">
+                <input form="assign-{{ c.id }}" type="checkbox"
+                       name="mandatory_{{ cp.id }}" value="1"
+                       class="mand-cb-{{ c.id }}"
+                       data-misspend="miss-pen-{{ cp.id }}"
+                       {% if cp.is_mandatory %}checked{% endif %}
+                       onchange="onMandatoryChange(this,'{{ c.id }}','miss-pen-{{ cp.id }}')">
+              </td>
+              <td>
+                <input form="assign-{{ c.id }}" type="number"
+                       id="miss-pen-{{ cp.id }}" name="miss_pen_{{ cp.id }}"
+                       value="{{ cp.mandatory_miss_penalty }}"
+                       min="0" style="width:68px;font-size:.82rem;">
+              </td>
+              <td>
+                <input form="assign-{{ c.id }}" type="number"
+                       name="order_{{ cp.id }}"
+                       value="{{ cp.mandatory_order if cp.mandatory_order is not none else '' }}"
+                       placeholder="—" style="width:52px;font-size:.82rem;">
+              </td>
+              <td>
+                <select form="assign-{{ c.id }}"
+                        name="circuit_{{ cp.id }}"
+                        class="circuit-sel-{{ c.id }}"
+                        style="font-size:.82rem;"
+                        data-current="{{ cgrp }}">
+                  <option value="">—</option>
+                  {% for grp_name in circuit_groups %}
+                  <option value="{{ grp_name }}" {% if cgrp == grp_name %}selected{% endif %}>{{ grp_name }}</option>
+                  {% endfor %}
+                </select>
+              </td>
+              {# Edit popup — only SI code / name / points; hidden inputs preserve the rest #}
+              <td style="width:1px;white-space:nowrap;">
+                <details style="position:relative;">
+                  <summary class="btn btn-secondary btn-sm" style="cursor:pointer;list-style:none;">Edit</summary>
+                  <div style="position:absolute;right:0;top:2rem;background:white;border:1px solid var(--border);
+                              border-radius:6px;padding:1rem;z-index:20;min-width:280px;
+                              box-shadow:0 4px 12px rgba(0,0,0,.12);">
+                    <form method="post" action="/courses/{{ c.id }}/controls/{{ cp.id }}/edit">
+                      <input type="hidden" name="is_mandatory" value="{{ '1' if cp.is_mandatory else '0' }}">
+                      <input type="hidden" name="mandatory_order" value="{{ cp.mandatory_order if cp.mandatory_order is not none else '' }}">
+                      <input type="hidden" name="mandatory_miss_penalty" value="{{ cp.mandatory_miss_penalty }}">
+                      <input type="hidden" name="circuit_group" value="{{ cp['circuit_group'] if 'circuit_group' in cp.keys() else '' }}">
+                      <input type="hidden" name="circuit_miss_penalty" value="{{ cp['circuit_miss_penalty'] if 'circuit_miss_penalty' in cp.keys() else 0 }}">
+                      <div class="form-row" style="flex-wrap:wrap;gap:.5rem;margin-bottom:.5rem;">
+                        <div class="form-group">
+                          <label>SI Code *</label>
+                          <input type="number" name="si_code" value="{{ cp.si_code }}" required style="width:80px;">
+                        </div>
+                        <div class="form-group">
+                          <label>Name</label>
+                          <input type="text" name="name" value="{{ cp.name }}" style="width:130px;">
+                        </div>
+                        <div class="form-group">
+                          <label>Points</label>
+                          <input type="number" name="points" value="{{ cp.points }}" style="width:70px;">
+                        </div>
+                      </div>
+                      <button type="submit" class="btn btn-primary btn-sm">Save</button>
+                    </form>
+                  </div>
+                </details>
+              </td>
+              {# Delete #}
+              <td style="width:1px;">
+                <form method="post" action="/courses/{{ c.id }}/controls/{{ cp.id }}/delete"
+                      onsubmit="return confirm('Delete control {{ cp.si_code }}?')">
+                  <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+                </form>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+    </div>
+  </form>
+  {% else %}
+  <p style="color:var(--text-muted);margin-bottom:1rem;">No controls yet — add one below.</p>
+  {% endif %}
+
+  <!-- Add control -->
+  <details style="margin-bottom:.75rem;">
+    <summary class="btn btn-secondary btn-sm" style="cursor:pointer;list-style:none;">+ Add Control</summary>
+    <div style="margin-top:.5rem;padding:.75rem;background:var(--bg);border:1px solid var(--border);border-radius:6px;">
+      <p style="font-size:.78rem;color:var(--text-muted);margin:0 0 .5rem;">
+        Mandatory, order, and circuit are assigned via <strong>Save Assignments</strong> after adding.
+      </p>
+      <form method="post" action="/courses/{{ c.id }}/controls/add">
+        <div class="form-row" style="align-items:flex-end;flex-wrap:wrap;gap:.5rem;">
+          <div class="form-group">
+            <label>SI Code * <span style="font-weight:400;text-transform:none;font-size:.75rem;color:var(--text-muted);">(physical station number)</span></label>
+            <input type="number" name="si_code" required style="width:90px;">
+          </div>
+          <div class="form-group">
+            <label>Name</label>
+            <input type="text" name="name" placeholder="Label" style="width:140px;">
+          </div>
+          <div class="form-group">
+            <label>Points</label>
+            <input type="number" name="points" value="10" style="width:70px;">
+          </div>
+          <button type="submit" class="btn btn-secondary btn-sm">Add Control</button>
+        </div>
+      </form>
+    </div>
+  </details>
+
+  <!-- Bulk import controls -->
+  <details>
+    <summary style="cursor:pointer;font-size:.82rem;color:var(--text-muted);font-weight:600;
+                    text-transform:uppercase;letter-spacing:.04em;list-style:none;
+                    display:flex;align-items:center;gap:.4rem;">
+      <span>&#8853;</span> Bulk Add / Update Controls (CSV)
+    </summary>
+    <div style="margin-top:.6rem;padding:.75rem;background:var(--bg);border:1px solid var(--border);border-radius:6px;">
+      <p style="font-size:.82rem;color:var(--text-muted);margin-bottom:.5rem;">
+        One control per line: <code>si_code, points [, name [, is_mandatory (0/1) [, order [, miss_penalty]]]]</code><br>
+        Existing controls with the same SI code are updated; new ones are inserted. Circuit fields are assigned via Save Assignments.
+      </p>
+      <form method="post" action="/import/controls">
+        <input type="hidden" name="course_id" value="{{ c.id }}">
+        <input type="hidden" name="redirect_to" value="/courses">
+        <textarea name="data" rows="6" style="width:100%;font-family:monospace;font-size:.83rem;"
+                  placeholder="31, 10, Hill Top&#10;32, 10, River Bend&#10;33, 15, Summit, 0&#10;34, 20, Gate, 1, 1"></textarea>
+        <button type="submit" class="btn btn-secondary btn-sm" style="margin-top:.4rem;">Import Controls</button>
+      </form>
+    </div>
+  </details>
+
+</div>
+
+{% else %}
+<div class="card">
+  <p style="color:var(--text-muted);">No courses yet. Add one above.</p>
+</div>
+{% endfor %}
+
+{% endblock %}

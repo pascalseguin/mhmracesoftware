@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Receipt — {{ result.racer.name }}</title>
+  <style>
+    /* ── Screen styles ── */
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #e0e0e0;
+      font-family: monospace;
+      font-size: 13px;
+      padding: 1.5rem;
+      color: #111;
+    }
+
+    .controls {
+      max-width: 560px;
+      margin: 0 auto 1rem;
+      display: flex;
+      gap: .5rem;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .controls a, .controls button {
+      font-family: sans-serif;
+      font-size: .82rem;
+      padding: .35rem .85rem;
+      border-radius: 4px;
+      cursor: pointer;
+      text-decoration: none;
+      border: 1px solid #999;
+      background: #fff;
+      color: #333;
+    }
+
+    .controls button.print-btn {
+      background: #1a6e3c;
+      color: #fff;
+      border-color: #1a6e3c;
+      font-weight: 600;
+    }
+
+    .page {
+      background: #fff;
+      max-width: 560px;
+      margin: 0 auto;
+      padding: 1.5rem 2rem;
+      border-radius: 4px;
+      box-shadow: 0 2px 8px rgba(0,0,0,.18);
+    }
+
+    /* ── Receipt block — exact thermal width ── */
+    .receipt {
+      white-space: pre;
+      font-family: "Courier New", Courier, monospace;
+      font-size: 12.5px;
+      line-height: 1.45;
+      letter-spacing: .01em;
+      /* 42 chars × ~7.5px per char ≈ 315px — matches 58mm paper at 203 dpi */
+      width: 42ch;
+    }
+
+    /* ── All-punches section ── */
+    .punch-section {
+      margin-top: 1.5rem;
+      border-top: 2px dashed #ccc;
+      padding-top: 1rem;
+      font-family: "Courier New", Courier, monospace;
+      font-size: 12px;
+    }
+
+    .punch-section h2 {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: #555;
+      margin-bottom: .5rem;
+    }
+
+    .punch-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+
+    .punch-table th {
+      text-align: left;
+      padding: .15rem .4rem .15rem 0;
+      border-bottom: 1px solid #ccc;
+      font-size: 11px;
+      color: #555;
+    }
+
+    .punch-table td {
+      padding: .18rem .4rem .18rem 0;
+      vertical-align: top;
+    }
+
+    .matched   { color: #1a6e3c; }
+    .unmatched { color: #b94a48; }
+
+    /* ── Print overrides ── */
+    @media print {
+      body {
+        background: #fff;
+        padding: 0;
+      }
+
+      .controls { display: none; }
+
+      .page {
+        box-shadow: none;
+        padding: 0;
+        max-width: none;
+      }
+
+      /* On print, render at the physical 58mm thermal receipt width */
+      .receipt {
+        font-size: 8.5pt;
+        width: 42ch;
+      }
+
+      .punch-section {
+        font-size: 8pt;
+      }
+
+      .punch-table {
+        font-size: 8pt;
+      }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Screen-only controls -->
+<div class="controls">
+  <button class="print-btn" onclick="window.print()">&#128424; Print</button>
+  <a href="/results">← Back to Results</a>
+  <span style="font-family:sans-serif;font-size:.78rem;color:#666;margin-left:.5rem;">
+    Printing at thermal-receipt width (42 chars / 58mm paper)
+  </span>
+</div>
+
+<div class="page">
+
+  <!-- ── Main receipt (exact thermal format) ── -->
+  <div class="receipt">{{ lines | join("\n") }}</div>
+
+  <!-- ── Full raw punch log ── -->
+  <div class="punch-section">
+    <h2>Full Punch Record ({{ result.entry.punches | length }} punches)</h2>
+
+    {% if result.entry.punches %}
+    <table class="punch-table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>SI Code</th>
+          <th>Time</th>
+          <th>Control</th>
+          <th>Pts</th>
+          <th>Note</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in result.entry.punches | sort(attribute='punch_time') %}
+        {% set cp = matched_map.get(p.si_code) %}
+        <tr>
+          <td style="color:#999;">{{ loop.index }}</td>
+          <td>{{ p.si_code }}</td>
+          <td>{{ p.punch_time.strftime("%H:%M:%S") }}</td>
+          {% if cp %}
+          <td class="matched">{{ cp.name or ("SI " ~ cp.si_code) }}</td>
+          <td class="matched">{{ cp.points }}</td>
+          <td class="matched">&#10003; matched</td>
+          {% else %}
+          <td class="unmatched">—</td>
+          <td class="unmatched">—</td>
+          <td class="unmatched">
+            &#10007; unmatched
+            {% if p.is_manual %}(manual){% endif %}
+          </td>
+          {% endif %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p style="color:#888;">No punch records on file for this entry.</p>
+    {% endif %}
+
+    {% if result.controls_missed_mandatory %}
+    <p style="margin-top:.6rem;color:#b94a48;font-size:11px;">
+      MISSED MANDATORY:
+      {% for cp in result.controls_missed_mandatory %}
+        {{ cp.name or cp.si_code }}{% if not loop.last %}, {% endif %}
+      {% endfor %}
+    </p>
+    {% endif %}
+
+  </div><!-- /punch-section -->
+
+</div><!-- /page -->
+
+<script>
+  // Auto-trigger the print dialog when the page loads so clicking "Print"
+  // in the results table immediately opens the OS print dialog.
+  window.addEventListener("load", function () { window.print(); });
+</script>
+
+</body>
+</html>

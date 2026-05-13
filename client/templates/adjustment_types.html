@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+{% block title %}Bonus / Penalty Types{% endblock %}
+
+{% block page_header %}
+<div class="page-header">
+  <h1>Bonus &amp; Penalty Types</h1>
+  <p>Define reusable categories — apply them per team from the Adjustments page with an optional value override</p>
+</div>
+{% endblock %}
+
+{% block content %}
+
+<!-- Existing types list -->
+{% if adj_types %}
+<div class="card">
+  <h2>Defined Types</h2>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Category</th>
+          <th>Default Points</th>
+          <th>Description</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for t in adj_types %}
+        <tr>
+          <td><strong>{{ t.name }}</strong></td>
+          <td>
+            {% if t.category == 'bonus' %}
+            <span class="badge" style="background:var(--success);color:#fff;">Bonus</span>
+            {% else %}
+            <span class="badge" style="background:var(--danger);color:#fff;">Penalty</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if t.category == 'bonus' %}
+            <span style="color:var(--success);">+{{ t.default_points }}</span>
+            {% else %}
+            <span style="color:var(--danger);">-{{ t.default_points }}</span>
+            {% endif %}
+          </td>
+          <td style="color:var(--text-muted);font-size:.88rem;">{{ t.description or "—" }}</td>
+          <td style="display:flex;gap:.5rem;flex-wrap:wrap;">
+            <!-- Edit inline form (toggle with details/summary) -->
+            <details style="display:inline;">
+              <summary class="btn btn-secondary btn-sm" style="cursor:pointer;display:inline-block;">Edit</summary>
+              <div style="position:absolute;z-index:10;background:var(--bg-card);border:1px solid var(--border);
+                          border-radius:6px;padding:1rem;margin-top:.25rem;box-shadow:0 4px 12px rgba(0,0,0,.15);min-width:280px;">
+                <form method="post" action="/adjustment-types/{{ t.id }}/edit">
+                  <div class="form-group" style="margin-bottom:.5rem;">
+                    <label>Name</label>
+                    <input type="text" name="name" value="{{ t.name }}" required style="width:100%;">
+                  </div>
+                  <div class="form-group" style="margin-bottom:.5rem;">
+                    <label>Category</label>
+                    <select name="category" style="width:100%;">
+                      <option value="bonus" {% if t.category == 'bonus' %}selected{% endif %}>Bonus (adds points)</option>
+                      <option value="penalty" {% if t.category == 'penalty' %}selected{% endif %}>Penalty (deducts points)</option>
+                    </select>
+                  </div>
+                  <div class="form-group" style="margin-bottom:.5rem;">
+                    <label>Default Points (magnitude)</label>
+                    <input type="number" name="default_points" value="{{ t.default_points }}" min="0" style="width:100%;">
+                  </div>
+                  <div class="form-group" style="margin-bottom:.75rem;">
+                    <label>Description (optional)</label>
+                    <input type="text" name="description" value="{{ t.description }}" style="width:100%;">
+                  </div>
+                  <button type="submit" class="btn btn-primary btn-sm">Save</button>
+                </form>
+              </div>
+            </details>
+            <form method="post" action="/adjustment-types/{{ t.id }}/delete"
+                  onsubmit="return confirm('Delete type \'{{ t.name }}\'? Applied adjustments will become Manual.')">
+              <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+<!-- Create new type -->
+<div class="card">
+  <h2>Add New Type</h2>
+  <p style="color:var(--text-muted);font-size:.88rem;margin-bottom:1rem;">
+    The <strong>Default Points</strong> value is a positive magnitude — whether it adds or
+    subtracts depends on the Category. You can override the amount per-application in the
+    Adjustments page.
+  </p>
+  <form method="post" action="/adjustment-types/add">
+    <div class="form-row" style="align-items:flex-end;flex-wrap:wrap;gap:1rem;">
+
+      <div class="form-group">
+        <label>Name</label>
+        <input type="text" name="name" placeholder="e.g. Photo Challenge" required style="width:180px;">
+      </div>
+
+      <div class="form-group">
+        <label>Category</label>
+        <select name="category">
+          <option value="bonus">Bonus (adds points)</option>
+          <option value="penalty">Penalty (deducts points)</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Default Points</label>
+        <input type="number" name="default_points" value="0" min="0" style="width:90px;">
+      </div>
+
+      <div class="form-group">
+        <label>Description <span style="color:var(--text-muted);font-weight:400;">(optional)</span></label>
+        <input type="text" name="description" placeholder="e.g. Awarded for finding photo checkpoint" style="width:260px;">
+      </div>
+
+      <button type="submit" class="btn btn-primary">Add Type</button>
+    </div>
+  </form>
+</div>
+
+<!-- Usage guide -->
+<div class="card" style="border-left:3px solid var(--accent);">
+  <h2>How to use</h2>
+  <ol style="margin:.5rem 0 0 1.2rem;font-size:.9rem;line-height:1.8;">
+    <li>Create your bonus/penalty types here (e.g. <em>Photo Challenge</em> = +5, <em>Gear Violation</em> = −10).</li>
+    <li>Go to <a href="/adjustments">Adjustments</a> — each team has an <strong>Apply Type</strong> section.</li>
+    <li>Pick the type from the dropdown. The default point value is pre-filled — change it if needed for that specific team.</li>
+    <li>The Leaderboard (Class Results) shows <strong>Bonuses</strong>, <strong>Penalties</strong>, and <strong>Manual Adj</strong> as separate columns.</li>
+  </ol>
+</div>
+
+{% endblock %}

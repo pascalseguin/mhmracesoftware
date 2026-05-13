@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ race_name }}{% if race_year %} {{ race_year }}{% endif %} — Official Results</title>
+<style>
+*  { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+  font-size: 13px;
+  color: #1a1a1a;
+  background: #f0f0f0;
+}
+.page {
+  max-width: 1080px;
+  margin: 24px auto;
+  background: #fff;
+  padding: 40px 48px 48px;
+  box-shadow: 0 2px 12px rgba(0,0,0,.12);
+}
+
+/* ── Controls (hidden when printing) ─────────────────────── */
+.screen-controls {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-bottom: 28px;
+}
+.btn {
+  padding: 7px 16px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background: #fff;
+  cursor: pointer;
+  font-size: .85em;
+  text-decoration: none;
+  color: #333;
+  font-family: inherit;
+}
+.btn-primary { background: #1a5fb4; color: #fff; border-color: #1a5fb4; }
+.btn-primary:hover { background: #154fa0; }
+
+/* ── Race header ─────────────────────────────────────────── */
+.race-header {
+  text-align: center;
+  border-bottom: 3px solid #1a1a1a;
+  padding-bottom: 20px;
+  margin-bottom: 32px;
+}
+.race-header h1 {
+  font-size: 2.4em;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  line-height: 1.1;
+}
+.race-header .tag {
+  font-size: 1em;
+  color: #555;
+  margin-top: 6px;
+  font-weight: 400;
+  text-transform: uppercase;
+  letter-spacing: .12em;
+}
+.race-header .meta {
+  font-size: .78em;
+  color: #999;
+  margin-top: 10px;
+}
+
+/* ── Class section ───────────────────────────────────────── */
+.class-section {
+  margin-bottom: 36px;
+}
+.class-header {
+  background: #1a1a1a;
+  color: #fff;
+  padding: 9px 16px;
+  font-size: .95em;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .1em;
+}
+
+/* ── Results table ───────────────────────────────────────── */
+table { width: 100%; border-collapse: collapse; }
+
+thead th {
+  background: #f4f4f4;
+  border-bottom: 2px solid #d0d0d0;
+  padding: 7px 10px;
+  text-align: left;
+  font-size: .78em;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: #555;
+  white-space: nowrap;
+}
+thead th.r { text-align: right; }
+
+tbody tr { border-bottom: 1px solid #ebebeb; }
+tbody tr:last-child { border-bottom: 2px solid #d0d0d0; }
+tbody tr.gold   { background: #fffbe8; }
+tbody tr.silver { background: #f7f7f7; }
+tbody tr.bronze { background: #fff6ee; }
+tbody tr:hover  { background: #f0f6ff; }
+
+tbody td {
+  padding: 8px 10px;
+  vertical-align: middle;
+}
+tbody td.r { text-align: right; }
+
+.rank-cell { font-size: 1.1em; font-weight: 800; width: 44px; }
+.rank-1 { color: #c8990a; }
+.rank-2 { color: #7a7a7a; }
+.rank-3 { color: #a05020; }
+
+.bib    { font-family: "Courier New", monospace; color: #666; font-size: .9em; white-space: nowrap; }
+.name   { font-weight: 600; font-size: 1em; }
+
+.pts    { font-weight: 600; }
+.total  { font-weight: 800; font-size: 1.08em; }
+.bonus  { color: #1a7a1a; font-weight: 600; }
+.penalty{ color: #b91c1c; font-weight: 600; }
+.manual { color: #555;    font-weight: 600; }
+.dash   { color: #ccc; }
+
+/* Status pill */
+.status {
+  display: inline-block;
+  font-size: .7em;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 3px;
+  letter-spacing: .04em;
+  white-space: nowrap;
+}
+.s-ok     { background: #d1fae5; color: #065f46; }
+.s-dnf    { background: #fee2e2; color: #991b1b; }
+.s-dns    { background: #fef3c7; color: #92400e; }
+.s-dsq    { background: #fce7f3; color: #9d174d; }
+.s-active { background: #dbeafe; color: #1e40af; }
+
+.empty-row td { color: #aaa; font-style: italic; padding: 12px 16px; background: #fafafa; }
+
+/* ── Summary bar ─────────────────────────────────────────── */
+.summary-bar {
+  display: flex;
+  gap: 2rem;
+  flex-wrap: wrap;
+  margin-bottom: 28px;
+  padding: 12px 16px;
+  background: #f9f9f9;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  font-size: .82em;
+  color: #555;
+}
+.summary-bar strong { color: #1a1a1a; }
+
+/* ── Column legend ───────────────────────────────────────── */
+.legend {
+  display: flex;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+  font-size: .78em;
+  color: #777;
+}
+.legend span { display: flex; align-items: center; gap: .3rem; }
+
+/* ── Footer ──────────────────────────────────────────────── */
+.footer {
+  margin-top: 40px;
+  padding-top: 12px;
+  border-top: 1px solid #ddd;
+  font-size: .75em;
+  color: #bbb;
+  text-align: center;
+}
+
+/* ── Print overrides ─────────────────────────────────────── */
+@media print {
+  * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+  body { background: #fff; font-size: 11px; }
+  .page { margin: 0; padding: 12mm 14mm; box-shadow: none; max-width: 100%; }
+  .screen-controls { display: none; }
+  .class-section { page-break-inside: avoid; }
+  tbody tr:hover { background: inherit; }
+  a { color: inherit; text-decoration: none; }
+  @page { margin: 12mm; }
+}
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- Screen controls -->
+  <div class="screen-controls">
+    <span style="font-size:.78em;color:#888;align-self:center;">
+      In the print dialog, set <strong>Destination</strong> to
+      <strong>Save as PDF</strong> &mdash; not &ldquo;Microsoft Print to PDF&rdquo;
+    </span>
+    <button class="btn btn-primary" onclick="window.print()">&#128424; Save as PDF</button>
+    <a href="/results" class="btn">&#8617; Back to Results</a>
+  </div>
+
+  <!-- Race header -->
+  <div class="race-header">
+    <h1>{{ race_name }}{% if race_year %} {{ race_year }}{% endif %}</h1>
+    <div class="tag">Official Results</div>
+    <div class="meta">Generated {{ generated }}</div>
+  </div>
+
+  <!-- Summary bar -->
+  {% set total_entries = class_data | sum(attribute='rows') | list | length %}
+  <div class="summary-bar">
+    <span><strong>{{ class_data | length }}</strong> class{{ 'es' if class_data | length != 1 else '' }}</span>
+    <span><strong>{{ courses | length }}</strong> course{{ 's' if courses | length != 1 else '' }}</span>
+    <span><strong>{{ total_entries }}</strong> teams entered</span>
+    {% for c in courses %}
+    <span>{{ c.name }}: control points − overtime penalty</span>
+    {% endfor %}
+  </div>
+
+  <!-- Column legend -->
+  <div class="legend">
+    <strong style="color:#555;">Columns:</strong>
+    {% for c in courses %}
+    <span>&#9632; <em>{{ c.name }}</em> = controls scored − overtime</span>
+    {% endfor %}
+    <span style="color:#1a7a1a;">&#43; Bonus</span>
+    <span style="color:#b91c1c;">&#8722; Penalty</span>
+    <span>&#177; Manual adj</span>
+    <span style="font-weight:700;">= Total</span>
+  </div>
+
+  <!-- One section per class -->
+  {% for group in class_data %}
+  <div class="class-section">
+    <div class="class-header">{{ group.cls.name }}</div>
+
+    <table>
+      <thead>
+        <tr>
+          <th style="width:44px;">Rank</th>
+          <th style="width:56px;">Bib</th>
+          <th>Team</th>
+          {% for c in courses %}
+          <th class="r">{{ c.name }}</th>
+          {% endfor %}
+          <th class="r" style="color:#1a7a1a;">Bonus</th>
+          <th class="r" style="color:#b91c1c;">Penalty</th>
+          <th class="r">Manual</th>
+          <th class="r" style="font-size:.9em;font-weight:800;">Total</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if group.rows %}
+          {% for row in group.rows %}
+          <tr class="{% if row.rank == 1 %}gold{% elif row.rank == 2 %}silver{% elif row.rank == 3 %}bronze{% endif %}">
+
+            <td class="rank-cell {% if row.rank <= 3 %}rank-{{ row.rank }}{% endif %}">
+              {% if row.rank == 1 %}1st
+              {% elif row.rank == 2 %}2nd
+              {% elif row.rank == 3 %}3rd
+              {% else %}{{ row.rank }}th{% endif %}
+            </td>
+
+            <td class="bib">#{{ row.racer.bib_number or "—" }}</td>
+            <td class="name">{{ row.racer.name }}</td>
+
+            {% for c in courses %}
+            <td class="r">
+              {% if c.id in row.pre_adj %}
+                <span class="pts">{{ row.pre_adj[c.id] }}</span>
+              {% else %}
+                <span class="dash">—</span>
+              {% endif %}
+            </td>
+            {% endfor %}
+
+            <td class="r bonus">
+              {% if row.bonus_pts %}<span>+{{ row.bonus_pts }}</span>{% else %}<span class="dash">—</span>{% endif %}
+            </td>
+            <td class="r penalty">
+              {% if row.penalty_pts %}<span>{{ row.penalty_pts }}</span>{% else %}<span class="dash">—</span>{% endif %}
+            </td>
+            <td class="r manual">
+              {% if row.manual_pts %}<span>{{ "%+d" | format(row.manual_pts) }}</span>{% else %}<span class="dash">—</span>{% endif %}
+            </td>
+
+            <td class="r total">{{ row.total }}</td>
+
+            <td>
+              {% for sr in row.course_scores.values() %}
+              {% set sv = sr.entry.status.value | lower %}
+              <span class="status s-{{ sv }}">{{ sr.entry.status.value }}</span>
+              {% endfor %}
+            </td>
+          </tr>
+          {% endfor %}
+        {% else %}
+          <tr class="empty-row"><td colspan="{{ 6 + courses | length }}">No entries in this class.</td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+  {% endfor %}
+
+  <div class="footer">
+    {{ race_name }}{% if race_year %} {{ race_year }}{% endif %}
+    &nbsp;·&nbsp; Official Results &nbsp;·&nbsp; Generated {{ generated }}
+  </div>
+
+</div>
+</body>
+</html>
